@@ -411,9 +411,17 @@ function ensureView(tab) {
     tab.favicon = favicons[0];
     sendState();
   });
-  wc.setWindowOpenHandler(({ url, disposition }) => {
-    createTab(url, { activate: disposition !== 'background-tab', isPrivate: tab.isPrivate });
-    return { action: 'deny' };
+  wc.setWindowOpenHandler(popupHandler(tab.isPrivate));
+  wc.on('did-create-window', (bw) => bw.webContents.setWindowOpenHandler(popupHandler(tab.isPrivate)));
+  // страница закрыла себя сама (window.close(), например окно входа после OAuth) — закрываем и вкладку
+  wc.once('destroyed', () => {
+    if (tab.view !== view || !tabs.has(tab.id) || flushed || !win || win.isDestroyed()) return;
+    if (shownView === view) {
+      win.contentView.removeChildView(view);
+      shownView = null;
+    }
+    tab.view = null;
+    closeTab(tab.id);
   });
   wc.on('enter-html-full-screen', () => { htmlFullscreen = true; layout(); });
   wc.on('leave-html-full-screen', () => { htmlFullscreen = false; layout(); });
@@ -426,6 +434,28 @@ function ensureView(tab) {
 
   wc.loadURL(tab.url || NEWTAB_URL);
   return view;
+}
+
+// window.open с размерами (окна входа через Google, Telegram и т.п.) — настоящим попапом,
+// чтобы у него остался window.opener и он мог вернуть результат входа; остальное — вкладками
+function popupHandler(isPrivate) {
+  return ({ url, disposition, features }) => {
+    if (disposition === 'new-window') {
+      const size = Object.fromEntries(features.split(',').map((f) => f.trim().split('=')).filter(([k]) => k === 'width' || k === 'height'));
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          width: Math.max(320, +size.width || 520),
+          height: Math.max(320, +size.height || 640),
+          autoHideMenuBar: true,
+          backgroundColor: '#ffffff',
+          icon: path.join(__dirname, 'build', 'icon.png'),
+        },
+      };
+    }
+    createTab(url, { activate: disposition !== 'background-tab', isPrivate });
+    return { action: 'deny' };
+  };
 }
 
 function createTab(url = NEWTAB_URL, { activate = true, wsId = activeWs, restore = null, isPrivate = false } = {}) {
@@ -486,18 +516,26 @@ const PIP_EXIT = 'document.pictureInPictureElement && document.exitPictureInPict
 function autoPip(from, to) {
   if (!settings.autoPip) return;
   // userGesture=true: без «жеста пользователя» браузер не разрешит картинку в картинке
-  if (from.view && from.view.webContents.isCurrentlyAudible()) from.view.webContents.executeJavaScript(PIP_ENTER, true).catch(() => {});
-  if (to.view) to.view.webContents.executeJavaScript(PIP_EXIT, true).catch(() => {});
+  const fromWc = from.view?.webContents;
+  const toWc = to.view?.webContents;
+  if (fromWc && !fromWc.isDestroyed() && fromWc.isCurrentlyAudible()) fromWc.executeJavaScript(PIP_ENTER, true).catch(() => {});
+  if (toWc && !toWc.isDestroyed()) toWc.executeJavaScript(PIP_EXIT, true).catch(() => {});
 }
 
+let flushed = false; // окно уже закрывается: сессия сохранена, вкладки больше не трогаем
+
 function destroyTab(tab) {
-  if (tab.view) {
-    if (chromeExt && !tab.isPrivate) chromeExt.removeTab(tab.view.webContents);
-    if (shownView === tab.view) {
-      win.contentView.removeChildView(tab.view);
+  const view = tab.view;
+  tab.view = null; // до close(): 'destroyed' не должен закрыть вкладку второй раз
+  if (view) {
+    if (shownView === view) {
+      win.contentView.removeChildView(view);
       shownView = null;
     }
-    tab.view.webContents.close();
+    if (!view.webContents?.isDestroyed()) {
+      if (chromeExt && !tab.isPrivate) chromeExt.removeTab(view.webContents);
+      view.webContents.close();
+    }
   }
   tabs.delete(tab.id);
 }
@@ -1730,7 +1768,6 @@ app.whenReady().then(() => {
   win.on('enter-full-screen', () => { layout(); sendState(); });
   win.on('leave-full-screen', () => { layout(); sendState(); });
   // Chromium пишет cookies на диск пачками — перед выходом дожидаемся записи, иначе свежие входы теряются
-  let flushed = false;
   win.on('close', (e) => {
     if (flushed) return;
     e.preventDefault();
