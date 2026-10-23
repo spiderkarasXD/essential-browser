@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Поиск на странице</title>
+  <style>
+    :root { --ws: #2f7bff; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; font: 13px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: #ecebf2; }
+    svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    #bar {
+      position: absolute;
+      inset: 6px 8px 14px 8px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 6px 0 12px;
+      border-radius: 12px;
+      background: rgba(30, 30, 37, .97);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .09);
+      opacity: 0;
+      transform: translateY(-10px) scale(.97);
+      transition: opacity .15s ease, transform .2s cubic-bezier(.4, 0, 1, 1);
+    }
+    body.open #bar { opacity: 1; transform: none; transition: opacity .2s ease, transform .35s cubic-bezier(.34, 1.4, .64, 1); }
+    #bar:focus-within { box-shadow: 0 10px 30px rgba(0, 0, 0, .45), 0 0 0 1.5px var(--ws); }
+    #q { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: none; color: inherit; font: inherit; font-size: 13.5px; }
+    #q::placeholder { color: rgba(236, 235, 242, .45); }
+    #count { color: rgba(236, 235, 242, .55); font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 6px; white-space: nowrap; }
+    #count.none { color: #ff8c8f; }
+    button { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 7px; background: none; color: rgba(236, 235, 242, .7); cursor: pointer; transition: background .12s; }
+    button:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+    button svg { width: 15px; height: 15px; }
+    .sep { width: 1px; height: 18px; background: rgba(255, 255, 255, .1); margin: 0 2px; }
+  </style>
+</head>
+<body>
+  <div id="bar">
+    <input id="q" placeholder="Найти на странице" spellcheck="false" autocomplete="off">
+    <span id="count"></span>
+    <div class="sep"></div>
+    <button id="prev" title="Предыдущее (Shift+Enter)"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+    <button id="next" title="Следующее (Enter)"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <button id="close" title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <script src="find.js"></script>
+</body>
+</html>

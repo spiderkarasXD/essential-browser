@@ -1,0 +1,54 @@
+{
+  "name": "essential-browser",
+  "productName": "Essential",
+  "version": "0.5.0",
+  "description": "Essential — браузер на Chromium в стиле Zen и Arc",
+  "author": "Essential",
+  "license": "GPL-3.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "app.essential.browser",
+    "productName": "Essential",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "*.js",
+      "*.html",
+      "*.css",
+      "build/icon.png",
+      "assets/**",
+      "LICENSE",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Essential"
+    },
+    "portable": {
+      "artifactName": "Essential-${version}-portable.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-chrome-extensions": "^4.9.0",
+    "electron-chrome-web-store": "^0.13.0"
+  }
+}

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Настройки</title>
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div id="backdrop"></div>
+  <div id="panel">
+    <nav>
+      <div class="brand">Настройки</div>
+      <div id="pill"></div>
+      <button data-section="appearance">🎨 <span>Внешний вид</span></button>
+      <button data-section="search">🔎 <span>Поиск</span></button>
+      <button data-section="privacy">🛡️ <span>Конфиденциальность</span></button>
+      <button data-section="devices">🎙️ <span>Устройства</span></button>
+      <button data-section="downloads">📥 <span>Загрузки</span></button>
+      <button data-section="system">⚙️ <span>Chromium</span></button>
+      <button data-section="import">📦 <span>Импорт</span></button>
+      <button data-section="keys">⌨️ <span>Горячие клавиши</span></button>
+      <div class="version" id="version"></div>
+    </nav>
+    <main id="content"></main>
+    <button id="x" title="Закрыть (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <script src="theme.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

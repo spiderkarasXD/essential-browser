@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; script-src 'self'; style-src 'self'">
+  <title>Spotlight</title>
+  <link rel="stylesheet" href="spotlight.css">
+</head>
+<body>
+  <div id="backdrop"></div>
+  <div id="box">
+    <div id="field">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+      <input id="q" spellcheck="false" autocomplete="off" placeholder="Поиск или адрес сайта">
+      <span id="mode"></span>
+    </div>
+    <div id="list"></div>
+  </div>
+  <script src="spotlight.js"></script>
+</body>
+</html>

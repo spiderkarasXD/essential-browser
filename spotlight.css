@@ -1,0 +1,147 @@
+@property --ws {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2f7bff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: #ecebf2;
+  font: 14px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+
+svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 10, .45);
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+
+#box {
+  position: fixed;
+  left: 50%;
+  top: 18vh;
+  width: min(680px, calc(100vw - 32px));
+  transform: translate(-50%, -14px) scale(.96);
+  transform-origin: 50% 0;
+  opacity: 0;
+  filter: blur(4px);
+  border-radius: 16px;
+  background: rgba(28, 28, 36, .97);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, .55),
+    0 0 0 1px rgba(255, 255, 255, .08),
+    0 0 0 4px color-mix(in srgb, var(--ws) 30%, transparent);
+  overflow: hidden;
+  transition: opacity .18s ease, transform .2s cubic-bezier(.4, 0, 1, 1), filter .18s ease;
+}
+
+body.open #backdrop { opacity: 1; }
+body.open #box {
+  opacity: 1;
+  filter: none;
+  transform: translate(-50%, 0) scale(1);
+  transition: opacity .22s ease, transform .38s cubic-bezier(.22, 1.2, .36, 1), filter .22s ease;
+}
+
+/* строки подсказок мягко появляются при открытии */
+#list.fresh .item, #list.fresh .group { animation: item-in .32s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes item-in { from { opacity: 0; transform: translateY(6px); } }
+.item { transition: background .14s ease, color .14s ease; }
+
+#field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 18px;
+}
+#field > svg { width: 20px; height: 20px; color: rgba(236, 235, 242, .5); flex: none; }
+#q {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: 18px inherit;
+  font-family: inherit;
+}
+#q::placeholder { color: rgba(236, 235, 242, .4); }
+#mode {
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ws) 35%, transparent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#mode:empty { display: none; }
+
+#list:not(:empty) {
+  border-top: 1px solid rgba(255, 255, 255, .07);
+  padding: 6px;
+}
+#list { max-height: 60vh; overflow-y: auto; scrollbar-width: none; }
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.item.sel {
+  background: color-mix(in srgb, var(--ws) 78%, #000);
+  color: #fff;
+}
+.item .ico {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .07);
+  color: rgba(236, 235, 242, .7);
+}
+.item.sel .ico { background: rgba(255, 255, 255, .18); color: #fff; }
+.item .ico img { width: 16px; height: 16px; }
+.item .ico svg { width: 15px; height: 15px; }
+.item .text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.item .title, .item .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .sub { font-size: 12px; color: rgba(236, 235, 242, .45); }
+.item.sel .sub { color: rgba(255, 255, 255, .7); }
+.item .action {
+  display: none;
+  padding: 3px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .16);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.item.sel .action { display: block; }
+
+.group {
+  padding: 10px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(236, 235, 242, .38);
+}

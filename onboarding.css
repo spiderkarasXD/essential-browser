@@ -1,0 +1,314 @@
+:root {
+  --accent: #2f7bff;
+  --text: #f2f1f7;
+  --muted: rgba(242, 241, 247, .55);
+  --card: rgba(255, 255, 255, .045);
+  --line: rgba(255, 255, 255, .09);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --spring: cubic-bezier(.34, 1.4, .64, 1);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #060609;
+  color: var(--text);
+  font: 15px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+}
+body { transition: opacity .6s ease, transform .7s var(--ease), filter .6s ease; }
+body.out { opacity: 0; transform: scale(1.04); filter: blur(10px); }
+
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---------- живой фон ---------- */
+#aurora { position: fixed; inset: -20%; filter: blur(90px) saturate(1.2); opacity: .55; transition: opacity 1s ease; }
+#aurora i {
+  position: absolute;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  transition: background 1.2s ease;
+}
+#aurora i:nth-child(1) { background: var(--c1, #2f7bff); left: 5%; top: 10%; animation: drift1 18s ease-in-out infinite alternate; }
+#aurora i:nth-child(2) { background: var(--c2, #16c2ff); right: 0; top: 30%; animation: drift2 22s ease-in-out infinite alternate; opacity: .7; }
+#aurora i:nth-child(3) { background: var(--c3, #6a5cff); left: 30%; bottom: -5%; animation: drift3 26s ease-in-out infinite alternate; opacity: .5; }
+@keyframes drift1 { to { transform: translate(18vw, 12vh) scale(1.15); } }
+@keyframes drift2 { to { transform: translate(-22vw, -8vh) scale(.9); } }
+@keyframes drift3 { to { transform: translate(10vw, -18vh) scale(1.2); } }
+body.intro #aurora { opacity: .3; }
+
+#noise {
+  position: fixed;
+  inset: 0;
+  opacity: .12;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+/* ---------- сцена и шаги ---------- */
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.step {
+  grid-area: 1 / 1;
+  width: min(620px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+}
+/* старый шаг успевает почти исчезнуть, прежде чем появится новый — без каши из двух экранов */
+.step.enter { animation: step-in .7s .14s var(--ease) both; z-index: 1; }
+.step.leave { animation: step-out .3s cubic-bezier(.5, 0, .75, 0) both; pointer-events: none; z-index: 0; }
+.step.enter.back { animation-name: step-in-back; }
+.step.leave.back { animation-name: step-out-back; }
+@keyframes step-in { from { opacity: 0; transform: translateX(60px); filter: blur(8px); } }
+@keyframes step-out { to { opacity: 0; transform: translateX(-60px); filter: blur(8px); } }
+@keyframes step-in-back { from { opacity: 0; transform: translateX(-60px); filter: blur(8px); } }
+@keyframes step-out-back { to { opacity: 0; transform: translateX(60px); filter: blur(8px); } }
+
+/* элементы шага появляются каскадом */
+.step.enter > * { animation: rise .8s var(--ease) both; }
+.step.enter > *:nth-child(1) { animation-delay: .05s; }
+.step.enter > *:nth-child(2) { animation-delay: .12s; }
+.step.enter > *:nth-child(3) { animation-delay: .19s; }
+.step.enter > *:nth-child(4) { animation-delay: .26s; }
+.step.enter > *:nth-child(5) { animation-delay: .33s; }
+.step.enter > *:nth-child(6) { animation-delay: .4s; }
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } }
+
+.eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+h1 {
+  margin: 0;
+  font: 600 44px/1.08 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -.02em;
+}
+.sub { margin: 0; max-width: 460px; color: var(--muted); line-height: 1.5; }
+
+.actions { display: flex; gap: 10px; margin-top: 18px; }
+.btn {
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-weight: 600;
+  transition: background .2s ease, transform .2s var(--ease), box-shadow .2s ease, opacity .2s;
+}
+.btn:hover { background: rgba(255, 255, 255, .13); }
+.btn:active { transform: scale(.96); }
+.btn.primary { background: #f2f1f7; color: #0b0b10; box-shadow: none; }
+.btn.primary:hover { background: #fff; box-shadow: 0 0 0 6px rgba(255, 255, 255, .08); }
+.btn:disabled { opacity: .4; cursor: default; }
+.link { color: var(--muted); font-size: 13.5px; padding: 8px; }
+.link:hover { color: var(--text); }
+
+/* ---------- интро ---------- */
+/* селекторы с .step, чтобы перебить общий каскад .step.enter > * */
+.step .logo {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 18px;
+  animation: logo-in 1.3s var(--spring) both;
+}
+.logo .mark {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 28px;
+  box-shadow: 0 20px 60px rgba(47, 123, 255, .5);
+  z-index: 1;
+}
+.logo .ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 34px;
+  border: 2px solid rgba(110, 170, 255, .6);
+  animation: ripple 2.4s .5s var(--ease) infinite;
+}
+.logo .ring:nth-child(2) { animation-delay: 1.3s; }
+@keyframes logo-in {
+  0% { opacity: 0; transform: scale(.4) rotate(-12deg); filter: blur(12px); }
+  60% { opacity: 1; filter: blur(0); }
+  100% { transform: none; }
+}
+@keyframes ripple { from { transform: scale(1); opacity: .8; } to { transform: scale(2.1); opacity: 0; } }
+
+.title-anim span {
+  display: inline-block;
+  animation: letter 1s var(--ease) both;
+}
+@keyframes letter { from { opacity: 0; transform: translateY(30px) rotateX(70deg); filter: blur(6px); } }
+.step .intro-sub { animation: rise 1s 1.1s var(--ease) both; }
+.step .intro-actions { animation: rise 1s 1.6s var(--ease) both; }
+
+/* ---------- карточки выбора ---------- */
+.list { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  text-align: left;
+  transition: background .2s ease, box-shadow .25s ease, transform .2s var(--ease);
+}
+.option:hover { background: rgba(255, 255, 255, .07); }
+.option:active { transform: scale(.985); }
+.option.on { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .08); }
+.option .ico {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .08);
+  font-weight: 700;
+  font-size: 17px;
+  flex: none;
+}
+.option .ico.img img { width: 26px; height: 26px; object-fit: contain; }
+.option .ico.light { background: #fff; }
+.option .ico.glyph {
+  background: linear-gradient(135deg, #2f7bff, #16c2ff);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(47, 123, 255, .35);
+}
+.option .ico.glyph svg { width: 21px; height: 21px; }
+.option .text { flex: 1; min-width: 0; }
+.option .name { font-weight: 600; }
+.option .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.tick {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .3);
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: background .2s ease, box-shadow .2s ease;
+}
+.tick svg { width: 13px; height: 13px; stroke-width: 3; color: #0b0b10; opacity: 0; transform: scale(.5); transition: opacity .2s, transform .3s var(--spring); }
+.option.on .tick { background: #f2f1f7; box-shadow: none; }
+.option.on .tick svg { opacity: 1; transform: none; }
+
+.grid4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; margin-top: 10px; }
+.grid4 .option { flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px; }
+.grid4 .option .tick { position: absolute; top: 14px; right: 14px; }
+.grid4 .option { position: relative; }
+
+/* ---------- темы ---------- */
+.preview {
+  position: relative;
+  width: 100%;
+  height: 170px;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--line), 0 20px 50px rgba(0, 0, 0, .4);
+  transition: background .5s ease;
+}
+.preview .mock { position: absolute; inset: 0; display: flex; gap: 12px; padding: 14px; }
+.preview .side { width: 24%; display: flex; flex-direction: column; gap: 7px; }
+.preview .side i { height: 15px; border-radius: 6px; background: rgba(255, 255, 255, .14); }
+.preview .side i:nth-child(2) { background: rgba(255, 255, 255, .32); }
+.preview .page { flex: 1; border-radius: 10px; background: #18181e; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); transition: background .4s; }
+.preview.light .side i { background: rgba(0, 0, 0, .1); }
+.preview.light .side i:nth-child(2) { background: rgba(255, 255, 255, .85); }
+.preview.light .page { background: #fff; }
+.swatches { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; width: 100%; margin-top: 6px; }
+.swatch {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .15);
+  transition: transform .25s var(--spring), box-shadow .2s ease;
+}
+.swatch:hover { transform: scale(1.1); }
+.swatch.on { box-shadow: 0 0 0 3px #060609, 0 0 0 5px #f2f1f7; transform: scale(1.05); }
+.seg { display: inline-flex; padding: 4px; border-radius: 14px; background: rgba(255, 255, 255, .06); margin-top: 6px; }
+.seg button { padding: 7px 18px; border-radius: 10px; transition: background .2s ease; }
+.seg button.on { background: rgba(255, 255, 255, .14); }
+
+/* ---------- финал ---------- */
+.done-mark { width: 96px; height: 96px; margin-bottom: 10px; }
+.done-mark circle { stroke: rgba(255, 255, 255, .15); stroke-width: 3; }
+.done-mark path {
+  stroke: #f2f1f7;
+  stroke-width: 4;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: draw .8s .35s var(--ease) forwards;
+}
+.done-mark .arc {
+  stroke: #f2f1f7;
+  stroke-width: 3;
+  stroke-dasharray: 290;
+  stroke-dashoffset: 290;
+  animation: draw 1s var(--ease) forwards;
+}
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; margin-top: 12px; }
+.key { padding: 14px; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; color: var(--muted); }
+.key b { display: block; margin-bottom: 4px; color: var(--text); font-family: "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+
+.confetti { position: fixed; left: 50%; top: 42%; pointer-events: none; }
+.confetti i {
+  position: absolute;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  animation: burst 1.6s cubic-bezier(.15, .8, .3, 1) forwards;
+}
+@keyframes burst {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: translate(var(--x), var(--y)) rotate(var(--r)); opacity: 0; }
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin .7s linear infinite;
+  display: inline-block;
+  vertical-align: -3px;
+  margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.note { font-size: 13px; color: var(--muted); }
+
+/* ---------- точки прогресса ---------- */
+footer { position: fixed; left: 0; right: 0; bottom: 28px; display: flex; justify-content: center; }
+#dots { display: flex; gap: 8px; transition: opacity .4s; }
+body.intro #dots { opacity: 0; }
+#dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, .22);
+  transition: width .45s var(--spring), background .3s ease;
+}
+#dots i.on { width: 26px; background: #f2f1f7; }
