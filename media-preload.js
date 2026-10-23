@@ -22,6 +22,9 @@ function patch(prefs) {
   };
 }
 
+// на странице входа Google мы притворяемся Firefox (см. FIREFOX_UA в main.js), а у Firefox нет navigator.userAgentData
+if (location.hostname === 'accounts.google.com') webFrame.executeJavaScript('delete Navigator.prototype.userAgentData');
+
 if (/^https?:$/.test(location.protocol)) {
   const prefs = ipcRenderer.sendSync('media:prefs');
   if (prefs.mic || prefs.cam) webFrame.executeJavaScript(`(${patch})(${JSON.stringify(prefs)})`);
