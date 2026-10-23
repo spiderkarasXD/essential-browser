@@ -19,18 +19,27 @@ function size(n) {
 }
 function eta(sec) {
   if (!isFinite(sec) || sec <= 0) return '';
-  if (sec < 60) return `${Math.ceil(sec)} с`;
+  if (sec < 10) return `${Math.ceil(sec)} с`;
+  if (sec < 60) return `${Math.ceil(sec / 5) * 5} с`;
   if (sec < 3600) return `${Math.ceil(sec / 60)} мин`;
   return `${(sec / 3600).toFixed(1)} ч`;
 }
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
 
+// «15 / 107 МБ» вместо «15 МБ из 107 МБ», чтобы строка влезала целиком
+function progressOf(d) {
+  if (!(d.total > 0)) return size(d.received);
+  const [got, gotUnit] = size(d.received).split(' ');
+  const all = size(d.total);
+  return all.endsWith(' ' + gotUnit) ? `${got} / ${all}` : `${size(d.received)} / ${all}`;
+}
+
 function status(d) {
-  const of = d.total > 0 ? `${size(d.received)} из ${size(d.total)}` : size(d.received);
+  const of = progressOf(d);
   switch (d.state) {
     case 'progressing': {
       const left = d.total > 0 && d.speed > 0 ? eta((d.total - d.received) / d.speed) : '';
-      return [of, d.speed > 0 ? `${size(d.speed)}/с` : '', left && `осталось ${left}`].filter(Boolean).join(' · ');
+      return [of, d.speed > 0 ? `${size(d.speed)}/с` : '', left && `ещё ${left}`].filter(Boolean).join(' · ');
     }
     case 'paused': return `Пауза · ${of}`;
     case 'completed': return [size(d.total || d.received), host(d.url)].filter(Boolean).join(' · ');
@@ -47,14 +56,19 @@ function button(kind, title, id) {
   return b;
 }
 
+// скорость и «осталось» меняются постоянно — пишем их в строку не чаще раза в секунду
+const STATUS_EVERY = 1000;
+
 function render(items) {
   if (!items.length) {
     list.innerHTML = `<div class="empty">${ICON.empty}Загрузок пока нет</div>`;
     return;
   }
-  // переиспользуем строки по id, чтобы прогресс плавно двигался, а не перерисовывался
+  list.querySelector('.empty')?.remove();
+  // переиспользуем строки по id и не переставляем их без нужды:
+  // перевставленный элемент заново проигрывает анимацию появления и мигает
   const old = new Map([...list.querySelectorAll('.item')].map((el) => [+el.dataset.id, el]));
-  list.replaceChildren(...items.map((d) => {
+  const rows = items.map((d) => {
     const active = d.state === 'progressing' || d.state === 'paused';
     let el = old.get(d.id);
     if (!el) {
@@ -62,10 +76,17 @@ function render(items) {
       el.dataset.id = d.id;
       el.innerHTML = '<div class="ico"></div><div class="info"><div class="name"></div><div class="status"></div></div><div class="acts"></div>';
     }
-    el.className = 'item' + (active ? ' active' : '') + (d.state === 'paused' ? ' paused' : '')
+    const cls = 'item' + (active ? ' active' : '') + (d.state === 'paused' ? ' paused' : '')
       + (d.state === 'completed' ? ' done' : '') + (['cancelled', 'interrupted'].includes(d.state) ? ' bad' : '');
-    el.querySelector('.name').textContent = d.name;
-    el.querySelector('.status').textContent = status(d);
+    if (el.className !== cls) el.className = cls;
+    const name = el.querySelector('.name');
+    if (name.textContent !== d.name) name.textContent = d.name;
+    const st = el.querySelector('.status');
+    const now = Date.now();
+    if (el.dataset.state !== d.state || now - (+el.dataset.shown || 0) >= STATUS_EVERY) {
+      st.textContent = status(d);
+      el.dataset.shown = now;
+    }
     el.title = d.path || d.name;
 
     const ico = el.querySelector('.ico');
@@ -79,16 +100,21 @@ function render(items) {
     const bar = ico.querySelector('.bar');
     if (bar) bar.style.strokeDashoffset = d.total > 0 ? 100 - (d.received / d.total) * 100 : 75;
 
-    const acts = el.querySelector('.acts');
-    acts.replaceChildren(...(
-      d.state === 'progressing' ? [button('pause', 'Пауза', d.id), button('cancel', 'Отменить', d.id)]
-        : d.state === 'paused' ? [button('resume', 'Продолжить', d.id), button('cancel', 'Отменить', d.id)]
-          : d.state === 'completed' ? [button('show', 'Показать в папке', d.id), button('remove', 'Убрать из списка', d.id)]
-            : [button('retry', 'Скачать снова', d.id), button('remove', 'Убрать из списка', d.id)]
-    ));
-    el.onclick = d.state === 'completed' ? () => { close(); dl.action(d.id, 'open'); } : null;
+    // кнопки пересоздаём только при смене состояния, иначе пропадает наведение
+    if (el.dataset.state !== d.state) {
+      el.dataset.state = d.state;
+      el.querySelector('.acts').replaceChildren(...(
+        d.state === 'progressing' ? [button('pause', 'Пауза', d.id), button('cancel', 'Отменить', d.id)]
+          : d.state === 'paused' ? [button('resume', 'Продолжить', d.id), button('cancel', 'Отменить', d.id)]
+            : d.state === 'completed' ? [button('show', 'Показать в папке', d.id), button('remove', 'Убрать из списка', d.id)]
+              : [button('retry', 'Скачать снова', d.id), button('remove', 'Убрать из списка', d.id)]
+      ));
+      el.onclick = d.state === 'completed' ? () => { close(); dl.action(d.id, 'open'); } : null;
+    }
     return el;
-  }));
+  });
+  for (const [id, el] of old) if (!items.some((d) => d.id === id)) el.remove();
+  rows.forEach((el, i) => { if (list.children[i] !== el) list.insertBefore(el, list.children[i] || null); });
 }
 
 function place(x) {

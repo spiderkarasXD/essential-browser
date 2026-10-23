@@ -975,7 +975,9 @@ function trackDownload(item) {
   item.on('updated', (_e, state) => {
     d.received = item.getReceivedBytes();
     d.total = item.getTotalBytes();
-    d.speed = item.getCurrentBytesPerSecond ? item.getCurrentBytesPerSecond() : 0;
+    // сглаживаем скорость, иначе она скачет на каждом обновлении
+    const raw = item.getCurrentBytesPerSecond ? item.getCurrentBytesPerSecond() : 0;
+    d.speed = d.speed ? d.speed * 0.85 + raw * 0.15 : raw;
     d.path = item.getSavePath() || d.path;
     d.state = item.isPaused() ? 'paused' : state;
     pushDownloads();
