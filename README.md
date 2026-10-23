@@ -57,6 +57,7 @@ GPL-3.0 — см. [LICENSE](LICENSE). Проект использует electron
 - `find.*` — поиск на странице (Ctrl+F)
 - `downloads.*` — список загрузок (кружок прогресса на панели, Ctrl+J)
 - `media-preload.js` — выбранные микрофон и камера для сайтов
+- `chrome-preload.js` — `window.chrome` как в Chrome (без него Google не пускает в аккаунт)
 - `panel.*` — настройки и редактор тем
 - `onboarding.*` — первый запуск
 - `newtab.html` — страница новой вкладки

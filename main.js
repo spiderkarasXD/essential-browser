@@ -104,10 +104,6 @@ const saveSettings = () => writeJson('settings.json', settings);
 app.userAgentFallback = app.userAgentFallback
   .replace(/ Electron\/\S+/, '')
   .replace(/ (essential-browser|Essential|nitro-browser|Essential)\/\S+/i, '');
-// Google не пускает в аккаунт браузеры на Electron («Возможно, этот браузер небезопасен»),
-// даже с чистым user agent: страницу входа открываем от имени Firefox, как делают другие браузеры на Electron
-const GOOGLE_LOGIN = /^https:\/\/accounts\.google\.com\//;
-const FIREFOX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0';
 // Русский интерфейс сайтов (Accept-Language), а не язык по IP/VPN
 app.commandLine.appendSwitch('lang', 'ru');
 if (!settings.hardwareAcceleration) app.disableHardwareAcceleration();
@@ -416,11 +412,7 @@ function ensureView(tab) {
     sendState();
   });
   wc.setWindowOpenHandler(popupHandler(tab.isPrivate));
-  googleLoginUA(wc);
-  wc.on('did-create-window', (bw) => {
-    bw.webContents.setWindowOpenHandler(popupHandler(tab.isPrivate));
-    googleLoginUA(bw.webContents);
-  });
+  wc.on('did-create-window', (bw) => bw.webContents.setWindowOpenHandler(popupHandler(tab.isPrivate)));
   // страница закрыла себя сама (window.close(), например окно входа после OAuth) — закрываем и вкладку
   wc.once('destroyed', () => {
     if (tab.view !== view || !tabs.has(tab.id) || flushed || !win || win.isDestroyed()) return;
@@ -864,31 +856,13 @@ function setSetting(key, value) {
 
 // «Не отслеживать» вешаем на webRequest только когда включено: пока Electron слушает webRequest,
 // расширения не получают свои chrome.webRequest (ограничение electron-chrome-extensions)
-// у сессии один обработчик заголовков: и «не отслеживать», и вход в Google
 function applyDoNotTrack() {
-  const headers = (d, cb) => {
-    if (settings.doNotTrack) {
-      d.requestHeaders.DNT = '1';
-      d.requestHeaders['Sec-GPC'] = '1';
-    }
-    if (GOOGLE_LOGIN.test(d.url)) {
-      d.requestHeaders['User-Agent'] = FIREFOX_UA;
-      for (const h of Object.keys(d.requestHeaders)) if (/^sec-ch-ua/i.test(h)) delete d.requestHeaders[h];
-    } else if (d.requestHeaders['User-Agent'] === FIREFOX_UA) {
-      // первый запрос после ухода со страницы входа ещё несёт user agent Firefox
-      d.requestHeaders['User-Agent'] = app.userAgentFallback;
-    }
+  const wr = session.defaultSession.webRequest;
+  if (!settings.doNotTrack) return wr.onBeforeSendHeaders(null);
+  wr.onBeforeSendHeaders((d, cb) => {
+    d.requestHeaders.DNT = '1';
+    d.requestHeaders['Sec-GPC'] = '1';
     cb({ requestHeaders: d.requestHeaders });
-  };
-  for (const ses of [session.defaultSession, session.fromPartition('essential-private')]) ses.webRequest.onBeforeSendHeaders(headers);
-}
-
-// navigator.userAgent на странице входа тоже должен быть от Firefox, иначе Google видит несовпадение
-function googleLoginUA(wc) {
-  wc.on('did-start-navigation', (_e, url, isInPlace, isMainFrame) => {
-    if (!isMainFrame || isInPlace) return;
-    const ua = GOOGLE_LOGIN.test(url) ? FIREFOX_UA : app.userAgentFallback;
-    if (wc.getUserAgent() !== ua) wc.setUserAgent(ua);
   });
 }
 
@@ -932,6 +906,12 @@ function setupSession() {
   const mediaPreload = path.join(__dirname, 'media-preload.js');
   if (ses.registerPreloadScript) ses.registerPreloadScript({ type: 'frame', id: 'essential-media', filePath: mediaPreload });
   else ses.setPreloads([...ses.getPreloads(), mediaPreload]);
+  // window.chrome как в настоящем Chrome — без него Google не пускает в аккаунт (и в приватных вкладках тоже)
+  const chromePreload = path.join(__dirname, 'chrome-preload.js');
+  for (const s of [ses, session.fromPartition('essential-private')]) {
+    if (s.registerPreloadScript) s.registerPreloadScript({ type: 'frame', id: 'essential-chrome', filePath: chromePreload });
+    else s.setPreloads([...s.getPreloads(), chromePreload]);
+  }
 
   applyDoNotTrack();
 
