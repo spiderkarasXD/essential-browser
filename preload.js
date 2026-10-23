@@ -47,6 +47,19 @@ contextBridge.exposeInMainWorld('browser', {
   openPanel: send('panel:open'),
   onState: (cb) => ipcRenderer.on('state', (_e, state) => cb(state)),
   onToast: (cb) => ipcRenderer.on('toast', (_e, text) => cb(text)),
+  onDownloads: (cb) => ipcRenderer.on('downloads', (_e, summary) => cb(summary)),
+  openDownloads: send('dl:open'),
+  onOpenDownloads: (cb) => ipcRenderer.on('ui:openDownloads', () => cb()),
+});
+
+// Список загрузок (downloads.html)
+contextBridge.exposeInMainWorld('dl', {
+  onOpen: (cb) => ipcRenderer.on('downloads:open', (_e, data) => cb(data)),
+  onList: (cb) => ipcRenderer.on('downloads:list', (_e, list) => cb(list)),
+  action: send('dl:action'),
+  clear: send('dl:clear'),
+  folder: send('dl:folder'),
+  close: send('dl:close'),
 });
 
 // Всплывающая адресная строка (spotlight.html)

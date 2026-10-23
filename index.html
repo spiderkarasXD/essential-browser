@@ -35,6 +35,16 @@
     <div class="tb-right">
       <span class="zoom" data-act="zoom" title="Сбросить масштаб (Ctrl+0)"></span>
       <div id="tb-ext"></div>
+      <!-- кружок загрузок, как в Arc: кольцо заполняется по мере скачивания -->
+      <button class="icon dl-btn" id="dl-btn" data-act="downloads" title="Загрузки (Ctrl+J)" hidden>
+        <svg class="ring" viewBox="0 0 24 24">
+          <circle class="track" cx="12" cy="12" r="9.5"/>
+          <circle class="bar" cx="12" cy="12" r="9.5" pathLength="100"/>
+        </svg>
+        <svg class="glyph arrow" viewBox="0 0 24 24"><path d="M12 7v9M8 12.5l4 4 4-4"/></svg>
+        <svg class="glyph check" viewBox="0 0 24 24"><path d="M7.5 12.5l3 3 6-6.5"/></svg>
+        <span class="dl-count"></span>
+      </button>
       <button class="icon pin" data-act="pin" title="Закрепить сайт (Ctrl+D)">
         <svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 4 4H6l4-4z"/><path d="M12 14v6"/></svg>
       </button>

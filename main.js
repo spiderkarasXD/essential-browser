@@ -907,10 +907,111 @@ function setupSession() {
       for (let i = 1; fs.existsSync(target); i++) target = path.join(dir, `${base} (${i})${ext}`);
       item.setSavePath(target);
     }
-    toast(`Загрузка: ${name}`);
-    item.once('done', (_ev, state) => toast(state === 'completed' ? `Загружено: ${name}` : `Загрузка прервана: ${name}`));
+    trackDownload(item);
   });
 }
+
+// ---------- загрузки: кружок прогресса на панели и список, как в Arc ----------
+
+const downloads = []; // { id, name, url, path, received, total, speed, state, started, icon }
+const dlItems = new Map(); // id -> DownloadItem, пока загрузка идёт
+let dlId = 0;
+let dlTimer = null;
+
+function trackDownload(item) {
+  const d = {
+    id: ++dlId,
+    name: item.getFilename(),
+    url: item.getURL(),
+    path: item.getSavePath(),
+    received: 0,
+    total: item.getTotalBytes(),
+    speed: 0,
+    state: 'progressing',
+    started: Date.now(),
+    icon: null,
+  };
+  downloads.unshift(d);
+  if (downloads.length > 30) downloads.length = 30;
+  dlItems.set(d.id, item);
+  item.on('updated', (_e, state) => {
+    d.received = item.getReceivedBytes();
+    d.total = item.getTotalBytes();
+    d.speed = item.getCurrentBytesPerSecond ? item.getCurrentBytesPerSecond() : 0;
+    d.path = item.getSavePath() || d.path;
+    d.state = item.isPaused() ? 'paused' : state;
+    pushDownloads();
+  });
+  item.once('done', async (_e, state) => {
+    d.state = state; // completed | cancelled | interrupted
+    d.received = item.getReceivedBytes();
+    d.path = item.getSavePath() || d.path;
+    d.speed = 0;
+    dlItems.delete(d.id);
+    if (state === 'completed') {
+      try { d.icon = (await app.getFileIcon(d.path, { size: 'normal' })).toDataURL(); } catch {}
+    } else if (state === 'interrupted') {
+      toast(`Загрузка прервана: ${d.name}`);
+    }
+    pushDownloads(true);
+  });
+  pushDownloads(true);
+}
+
+// Сводка для кружка: общий прогресс по активным загрузкам
+function downloadSummary() {
+  const active = downloads.filter((d) => d.state === 'progressing' || d.state === 'paused');
+  const total = active.reduce((s, d) => s + d.total, 0);
+  const received = active.reduce((s, d) => s + d.received, 0);
+  const known = active.length && active.every((d) => d.total > 0);
+  return {
+    count: downloads.length,
+    active: active.length,
+    progress: known ? received / total : null, // null — размер неизвестен, кружок просто крутится
+    paused: active.length > 0 && active.every((d) => d.state === 'paused'),
+    lastDone: downloads[0]?.state === 'completed' ? downloads[0].id : null,
+  };
+}
+
+// Не чаще 5 раз в секунду: 'updated' у DownloadItem приходит очень часто
+function pushDownloads(now = false) {
+  const send = () => {
+    dlTimer = null;
+    win?.webContents.send('downloads', downloadSummary());
+    if (openOverlays.has('downloads')) overlays.downloads.webContents.send('downloads:list', downloads);
+  };
+  if (now) {
+    clearTimeout(dlTimer);
+    send();
+  } else if (!dlTimer) {
+    dlTimer = setTimeout(send, 200);
+  }
+}
+
+function openDownloads(x) {
+  showOverlay('downloads', 'downloads.html', 'downloads:open', { x, list: downloads, color: getWs()?.color });
+}
+
+ipcMain.on('dl:open', (_e, x) => openDownloads(x));
+ipcMain.on('dl:close', () => hideOverlay('downloads', 200));
+ipcMain.on('dl:action', (_e, id, action) => {
+  const d = downloads.find((x) => x.id === id);
+  const item = dlItems.get(id);
+  if (!d) return;
+  if (action === 'pause') item?.pause();
+  else if (action === 'resume' && item?.canResume()) item.resume();
+  else if (action === 'cancel') item?.cancel();
+  else if (action === 'open') shell.openPath(d.path).then((err) => err && toast('Файл не найден — возможно, его переместили'));
+  else if (action === 'show') shell.showItemInFolder(d.path);
+  else if (action === 'remove') downloads.splice(downloads.indexOf(d), 1);
+  else if (action === 'retry') { downloads.splice(downloads.indexOf(d), 1); win.webContents.downloadURL(d.url); }
+  pushDownloads(true);
+});
+ipcMain.on('dl:clear', () => {
+  for (let i = downloads.length - 1; i >= 0; i--) if (!dlItems.has(downloads[i].id)) downloads.splice(i, 1);
+  pushDownloads(true);
+});
+ipcMain.on('dl:folder', () => { hideOverlay('downloads', 200); shell.openPath(settings.downloadsDir || app.getPath('downloads')); });
 
 function restart() {
   saveSession();
@@ -1057,7 +1158,8 @@ function handleShortcut(event, input) {
     [only(true, false, true) && code === 'KeyC', () => setCompact(!compact)],
     [only(true) && code === 'Comma', () => openPanel()],
     [only(true) && code === 'KeyH', () => openSpotlight('history')],
-    [only(true) && code === 'KeyJ', () => shell.openPath(settings.downloadsDir || app.getPath('downloads'))],
+    // панель загрузок; координату кружка знает только интерфейс, поэтому просим его открыть
+    [only(true) && code === 'KeyJ', () => win.webContents.send('ui:openDownloads')],
     [only(true, true) && key === 'delete', () => openPanel('privacy')],
     [only(false) && key === 'f11', () => win.setFullScreen(!win.isFullScreen())],
   ];

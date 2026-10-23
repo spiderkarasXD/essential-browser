@@ -173,6 +173,50 @@ body.fs #toolbar { transform: translateY(-100%); opacity: 0; pointer-events: non
   cursor: pointer;
 }
 .zoom.on { display: block; }
+/* ---------- кружок загрузок ---------- */
+.dl-btn { position: relative; }
+.dl-btn[hidden] { display: none; }
+.dl-btn svg { position: absolute; inset: 0; margin: auto; }
+.dl-btn .ring { width: 24px; height: 24px; transform: rotate(-90deg); overflow: visible; }
+.dl-btn .ring circle { fill: none; stroke-width: 2.2; }
+.dl-btn .track { stroke: rgba(127, 127, 127, .3); }
+.dl-btn .bar {
+  stroke: var(--ws);
+  stroke-dasharray: 100;
+  stroke-dashoffset: calc(100 - var(--p, 0));
+  transition: stroke-dashoffset .35s cubic-bezier(.22, 1, .36, 1), stroke .3s ease;
+}
+/* размер неизвестен — по кругу бежит дуга */
+.dl-btn.indeterminate .bar { stroke-dashoffset: 72; animation: dl-spin 1s linear infinite; transform-origin: 12px 12px; }
+@keyframes dl-spin { to { transform: rotate(360deg); } }
+.dl-btn.paused .bar { stroke: var(--muted); }
+.dl-btn .glyph { width: 13px; height: 13px; stroke-width: 2.4; transition: opacity .25s ease, transform .35s cubic-bezier(.34, 1.56, .64, 1); }
+.dl-btn .check { opacity: 0; transform: scale(.4); color: #59c38a; }
+.dl-btn.done .arrow { opacity: 0; transform: scale(.4); }
+.dl-btn.done .check { opacity: 1; transform: none; }
+.dl-btn.done .bar { stroke: #59c38a; stroke-dashoffset: 0; }
+.dl-btn.done { animation: dl-pop .5s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes dl-pop { 40% { transform: scale(1.18); } }
+.dl-btn.idle .bar { stroke-dashoffset: 100; }
+.dl-btn.active .arrow { animation: dl-bob 1.2s ease-in-out infinite; }
+@keyframes dl-bob { 50% { transform: translateY(1.5px); } }
+.dl-count {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--ws);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+}
+.dl-count:empty { display: none; }
+
 #tb-ext { display: flex; gap: 2px; }
 #tb-ext .ext-btn img { width: 17px; height: 17px; border-radius: 3px; }
 #tb-ext .ext-btn { font-weight: 700; font-size: 12px; -webkit-app-region: no-drag; }

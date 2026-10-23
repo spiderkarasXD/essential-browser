@@ -375,8 +375,43 @@ browser.onToast((text) => {
   toastTimer = setTimeout(() => t.classList.remove('show'), 1800);
 });
 
+// ---------- кружок загрузок ----------
+
+let lastDone = null;
+let doneTimer = null;
+const dlBtn = $('#dl-btn');
+
+function openDownloads() {
+  const r = dlBtn.getBoundingClientRect();
+  browser.openDownloads(Math.round(r.left + r.width / 2) || window.innerWidth - 120);
+}
+
+browser.onDownloads((s) => {
+  dlBtn.hidden = !s.count;
+  dlBtn.classList.toggle('active', s.active > 0 && !s.paused);
+  dlBtn.classList.toggle('paused', s.paused);
+  dlBtn.classList.toggle('indeterminate', s.active > 0 && s.progress === null);
+  dlBtn.classList.toggle('idle', !s.active);
+  dlBtn.style.setProperty('--p', s.progress == null ? 0 : Math.round(s.progress * 100));
+  dlBtn.querySelector('.dl-count').textContent = s.active > 1 ? s.active : '';
+  dlBtn.title = s.active
+    ? `Загружается: ${s.active}` + (s.progress != null ? ` · ${Math.round(s.progress * 100)}%` : '') + ' (Ctrl+J)'
+    : 'Загрузки (Ctrl+J)';
+  // загрузка закончилась — кружок на пару секунд становится зелёной галочкой
+  if (!s.active && s.lastDone && s.lastDone !== lastDone) {
+    lastDone = s.lastDone;
+    dlBtn.classList.remove('done');
+    void dlBtn.offsetWidth;
+    dlBtn.classList.add('done');
+    clearTimeout(doneTimer);
+    doneTimer = setTimeout(() => dlBtn.classList.remove('done'), 2600);
+  }
+});
+browser.onOpenDownloads(openDownloads);
+
 // кнопки с data-act есть и в верхней панели, и в сайдбаре
 const ACTIONS = {
+  downloads: () => openDownloads(),
   back: () => browser.back(),
   forward: () => browser.forward(),
   reload: () => (state.nav.loading ? browser.stop() : browser.reload()),

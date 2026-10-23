@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Загрузки</title>
+  <link rel="stylesheet" href="downloads.css">
+</head>
+<body>
+  <div id="backdrop"></div>
+  <div id="pop">
+    <i id="notch"></i>
+    <header>
+      <div class="title">Загрузки</div>
+      <button id="folder" title="Открыть папку загрузок">
+        <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      </button>
+      <button id="clear" title="Убрать завершённые из списка">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12"/></svg>
+      </button>
+    </header>
+    <div id="list"></div>
+  </div>
+  <script src="downloads.js"></script>
+</body>
+</html>
