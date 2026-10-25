@@ -83,12 +83,17 @@ class Updater(private val ctx: Context, private val onChange: () -> Unit) {
     private fun download(tag: String, url: String) {
         val dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
         File(dir, "essential-update.apk").delete()
-        downloadId = dm.enqueue(
-            DownloadManager.Request(Uri.parse(url))
-                .setTitle("Essential $tag")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
-                .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, "essential-update.apk")
-        )
+        // скрытая загрузка (VISIBILITY_HIDDEN) требует особого разрешения — без него Android роняет приложение
+        downloadId = try {
+            dm.enqueue(
+                DownloadManager.Request(Uri.parse(url))
+                    .setTitle("Обновление Essential $tag")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                    .setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, "essential-update.apk")
+            )
+        } catch (e: Exception) {
+            return set("error", e = "не удалось начать загрузку: ${e.message}")
+        }
         progress = 0
         set("downloading", tag)
         main.postDelayed(object : Runnable {

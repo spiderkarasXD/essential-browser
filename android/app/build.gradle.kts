@@ -22,6 +22,11 @@ android {
         targetSdk = 35
         versionCode = 603
         versionName = "0.6.3"
+        // для проверки автообновления: gradlew assembleRelease -PtestVersion=0.6.2 соберёт «старую» версию
+        (project.findProperty("testVersion") as String?)?.let { v ->
+            versionName = v
+            versionCode = v.split('.').fold(0) { acc, part -> acc * 100 + (part.toIntOrNull() ?: 0) } // 0.6.2 → 602
+        }
     }
 
     signingConfigs {
