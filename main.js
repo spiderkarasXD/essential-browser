@@ -51,6 +51,30 @@ const DEFAULT_SETTINGS = {
   pinnedExtensions: [],
   micLabel: '', // микрофон и камера для сайтов; '' — как в Windows
   camLabel: '',
+  newTabStyle: 'spotlight', // Ctrl+T и «+»: spotlight — всплывающая строка, page — страница новой вкладки
+  autofill: true, // запоминать и подсказывать то, что вводишь в формы (почта, имя, телефон, адрес)
+  // как в chrome://settings/fonts и /languages — для новых вкладок
+  fontSize: 16,
+  monoFontSize: 13,
+  minFontSize: 0,
+  fontStandard: '',
+  fontSerif: '',
+  fontSans: '',
+  fontMono: '',
+  defaultZoom: 100,
+  languages: 'ru-RU,ru,en-US,en', // Accept-Language: на каком языке сайты показывают себя
+  httpsWarning: true, // предупреждать перед сайтами без HTTPS
+  httpAllowed: [], // сайты без HTTPS, на которые сказали «всё равно перейти»
+  // часы на новой вкладке (см. CLOCK_OPTIONS)
+  clock: { style: 'thin', color: 'white', seconds: false, h12: false, date: true },
+};
+// стили часов как на экране блокировки OriginOS / ColorOS
+const CLOCK_OPTIONS = {
+  style: ['thin', 'bold', 'stacked', 'outline', 'mono', 'analog', 'hidden'],
+  color: ['white', 'accent', 'gradient'],
+  seconds: [],
+  h12: [],
+  date: [],
 };
 const RESTART_KEYS = ['hardwareAcceleration', 'smoothScrolling', 'forceDarkSites'];
 
@@ -96,6 +120,7 @@ function writeJson(name, data) {
 
 const settings = { ...DEFAULT_SETTINGS, ...readJson('settings.json', {}) };
 settings.permissions = { ...DEFAULT_SETTINGS.permissions, ...settings.permissions };
+settings.clock = { ...DEFAULT_SETTINGS.clock, ...settings.clock };
 const saveSettings = () => writeJson('settings.json', settings);
 
 // ---------- флаги Chromium (до старта) ----------
@@ -186,7 +211,12 @@ function settingsSection(url) {
   return SETTINGS_ALIASES[s] || s || 'appearance';
 }
 
-const displayUrl = (url) => (!url || url === NEWTAB_URL ? '' : url);
+const displayUrl = (url) => {
+  if (!url || url === NEWTAB_URL) return '';
+  // на странице-предупреждении в адресной строке — сайт, куда шли
+  if (url.startsWith(WARN_URL)) return new URL(url).searchParams.get('url') || '';
+  return url;
+};
 const originOf = (u) => { try { return new URL(u).origin; } catch { return u; } };
 const getWs = (id = activeWs) => workspaces.find((w) => w.id === id);
 const activeTab = () => tabs.get(getWs()?.activeTab);
@@ -242,7 +272,7 @@ const defaultTheme = (color) => ({ colors: [color], strength: 55, grain: 0, mode
 
 function sanitizeTheme(t, fallbackColor) {
   const hex = (c) => /^#[0-9a-f]{6}$/i.test(c);
-  let colors = Array.isArray(t?.colors) ? t.colors.filter(hex).slice(0, 3) : [];
+  let colors = Array.isArray(t?.colors) ? t.colors.filter(hex).slice(0, 4) : [];
   // старая фиолетовая тема Nitro по умолчанию → новая синяя Essential
   if (colors.length === 1 && colors[0].toLowerCase() === '#7c5cff') colors = [COLORS[0]];
   return {
@@ -287,7 +317,7 @@ function sendState() {
     })),
     activeWs,
     icons: ICONS,
-    essentials,
+    essentials: withIcons(essentials),
     compact,
     peek,
     maximized: win.isMaximized(),
@@ -304,6 +334,70 @@ function sendState() {
   });
   const t = cur && tabInfo(cur);
   win.setTitle(t ? `${t.title} — Essential` : 'Essential');
+  scheduleSave(); // любое изменение вкладок/пространств — сохраняем, чтобы его не потерять при обновлении или сбое
+}
+
+// ---------- автосохранение ----------
+// Раньше сессия писалась только при закрытии окна, а установщик обновления закрывает браузер принудительно —
+// и пропадали вкладки, темы и пространства. Теперь сохраняем через пару секунд после каждого изменения.
+let saveTimer = null;
+function scheduleSave() {
+  if (saveTimer || flushed || !workspaces.length) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    if (!flushed) saveSession(false);
+  }, 2000);
+}
+
+// ---------- иконки сайтов ----------
+// Иконку, которую сайт сам показал во вкладке, запоминаем по домену: закреплённые сайты, плитки новой вкладки
+// и подсказки адресной строки берут её отсюда, а не гадают /favicon.ico (у многих сайтов его нет)
+let favicons = new Map();
+let faviconTimer = null;
+const hostOf = (url) => { try { return new URL(url).hostname; } catch { return ''; } };
+
+function rememberFavicon(url, icon) {
+  const host = hostOf(url);
+  if (!host || !icon || !/^(https?:|data:image\/)/.test(icon) || favicons.get(host) === icon) return;
+  favicons.delete(host); // свежие — в конец, старые вытесняются
+  favicons.set(host, icon);
+  while (favicons.size > 1000) favicons.delete(favicons.keys().next().value);
+  clearTimeout(faviconTimer);
+  faviconTimer = setTimeout(() => writeJson('favicons.json', Object.fromEntries(favicons)), 3000);
+}
+
+const iconOf = (url) => favicons.get(hostOf(url)) || null;
+const withIcons = (list) => list.map((e) => ({ ...e, icon: e.icon || iconOf(e.url) }));
+
+// ---------- автозаполнение форм ----------
+// { вид поля: [значения, свежие первыми] }. Вид — из autocomplete (email, tel, address-line1…) или из name поля.
+// Пароли и данные карт сюда не попадают — их отсеивает autofill-preload.js
+let autofill = {};
+let autofillTimer = null;
+const AUTOFILL_PER_KIND = 12;
+
+function autofillSave(kind, value) {
+  if (!settings.autofill || typeof kind !== 'string' || typeof value !== 'string') return;
+  kind = kind.slice(0, 60);
+  value = value.trim().slice(0, 200);
+  if (!kind || value.length < 2) return;
+  const list = (autofill[kind] || []).filter((v) => v !== value);
+  autofill[kind] = [value, ...list].slice(0, AUTOFILL_PER_KIND);
+  clearTimeout(autofillTimer);
+  autofillTimer = setTimeout(() => writeJson('autofill.json', autofill), 1000);
+}
+
+function autofillQuery(kind, prefix) {
+  if (!settings.autofill || typeof kind !== 'string') return [];
+  const p = String(prefix || '').toLowerCase();
+  return (autofill[kind] || []).filter((v) => v.toLowerCase().startsWith(p) && v.toLowerCase() !== p).slice(0, 6);
+}
+
+function autofillRemove(kind, value) {
+  if (!autofill[kind]) return;
+  autofill[kind] = autofill[kind].filter((v) => v !== value);
+  if (!autofill[kind].length) delete autofill[kind];
+  writeJson('autofill.json', autofill);
 }
 
 // Левый край страницы. При скрытии/показе панели он плавно едет вслед за CSS-анимацией сайдбара
@@ -356,6 +450,18 @@ function animateLeft() {
 
 // ---------- вкладки ----------
 
+// шрифты и масштаб по умолчанию (как chrome://settings/fonts) — Chromium задаёт их при создании страницы
+function pageFonts() {
+  const fam = { standard: settings.fontStandard, serif: settings.fontSerif, sansSerif: settings.fontSans, monospace: settings.fontMono };
+  return {
+    defaultFontSize: settings.fontSize,
+    defaultMonospaceFontSize: settings.monoFontSize,
+    minimumFontSize: settings.minFontSize,
+    defaultFontFamily: Object.fromEntries(Object.entries(fam).filter(([, v]) => v)),
+    zoomFactor: settings.defaultZoom / 100,
+  };
+}
+
 function ensureView(tab) {
   if (tab.view) return tab.view;
   const view = new WebContentsView({
@@ -363,6 +469,7 @@ function ensureView(tab) {
       sandbox: true,
       contextIsolation: true,
       spellcheck: settings.spellcheck,
+      ...pageFonts(),
       // приватные вкладки живут в общем сеансе в памяти: ни cookies, ни кэша на диске
       ...(tab.isPrivate ? { partition: 'essential-private' } : {}),
     },
@@ -407,12 +514,17 @@ function ensureView(tab) {
   wc.on('did-start-navigation', (_e, _url, isInPlace, isMainFrame) => {
     if (isMainFrame && !isInPlace) tab.favicon = null;
   });
-  wc.on('page-favicon-updated', (_e, favicons) => {
-    tab.favicon = favicons[0];
+  wc.on('page-favicon-updated', (_e, icons) => {
+    tab.favicon = icons[0];
+    if (!tab.isPrivate) rememberFavicon(wc.getURL(), icons[0]);
     sendState();
   });
   wc.setWindowOpenHandler(popupHandler(tab.isPrivate));
-  wc.on('did-create-window', (bw) => bw.webContents.setWindowOpenHandler(popupHandler(tab.isPrivate)));
+  wc.on('did-create-window', (bw) => {
+    bw.webContents.setWindowOpenHandler(popupHandler(tab.isPrivate));
+    watchSecurity(bw.webContents);
+  });
+  watchSecurity(wc);
   // страница закрыла себя сама (window.close(), например окно входа после OAuth) — закрываем и вкладку
   wc.once('destroyed', () => {
     if (tab.view !== view || !tabs.has(tab.id) || flushed || !win || win.isDestroyed()) return;
@@ -728,6 +840,12 @@ function hideOverlay(name, delay = 0) {
 
 // mode: new — новая вкладка; current — адрес текущей; search — пустой поиск в текущей (Ctrl+K); history — недавнее (Ctrl+H)
 function openSpotlight(mode) {
+  // «Новая вкладка — страницей»: сразу открываем страницу новой вкладки с её поиском, без всплывающей строки
+  if (mode === 'new' && settings.newTabStyle === 'page') {
+    const tab = tabs.get(createTab());
+    tab.view?.webContents.once('did-finish-load', () => { if (activeTab() === tab && !openOverlays.size) tab.view.webContents.focus(); });
+    return;
+  }
   const cur = activeTab();
   showOverlay('spotlight', 'spotlight.html', 'spotlight:open', {
     mode: mode === 'search' ? 'current' : mode === 'history' ? 'new' : mode,
@@ -749,7 +867,7 @@ function suggest(input) {
   if (!q) {
     for (const s of searches.slice(0, 5)) out.push(query(s));
     for (const h of history.slice(0, 4)) out.push({ type: 'history', title: h.title || h.url, url: h.url });
-    return out;
+    return withIcons(out);
   }
   const direct = parseUrl(raw);
   out.push(direct
@@ -797,7 +915,7 @@ function suggest(input) {
       seen.add(h.url);
     }
   }
-  return out;
+  return withIcons(out);
 }
 
 // ---------- импорт ----------
@@ -852,6 +970,12 @@ function setSetting(key, value) {
   if (key === 'spellcheck') session.defaultSession.setSpellCheckerEnabled(!!value);
   if (key === 'searchEngine') refreshNewtab(activeWc());
   if (key === 'doNotTrack') applyDoNotTrack();
+  if (key === 'languages') applyLanguages();
+}
+
+// Accept-Language для сайтов — как «Языки» в chrome://settings
+function applyLanguages() {
+  for (const s of [session.defaultSession, session.fromPartition('essential-private')]) s.setUserAgent(app.userAgentFallback, settings.languages);
 }
 
 // «Не отслеживать» вешаем на webRequest только когда включено: пока Electron слушает webRequest,
@@ -866,11 +990,12 @@ function applyDoNotTrack() {
   });
 }
 
-function clearData({ history: h, searches: s, cache, cookies }) {
+function clearData({ history: h, searches: s, cache, cookies, autofill: af }) {
   const ses = session.defaultSession;
   const jobs = [];
   if (h) { history = []; writeJson('history.json', history); }
   if (s) { searches = []; writeJson('searches.json', searches); }
+  if (af) { autofill = {}; writeJson('autofill.json', autofill); }
   if (cache) jobs.push(ses.clearCache());
   if (cookies) jobs.push(ses.clearStorageData());
   return Promise.all(jobs).then(() => true);
@@ -912,6 +1037,11 @@ function setupSession() {
     if (s.registerPreloadScript) s.registerPreloadScript({ type: 'frame', id: 'essential-chrome', filePath: chromePreload });
     else s.setPreloads([...s.getPreloads(), chromePreload]);
   }
+  // автозаполнение форм — только в обычных вкладках, приватные ничего не запоминают
+  const autofillPreload = path.join(__dirname, 'autofill-preload.js');
+  if (ses.registerPreloadScript) ses.registerPreloadScript({ type: 'frame', id: 'essential-autofill', filePath: autofillPreload });
+  else ses.setPreloads([...ses.getPreloads(), autofillPreload]);
+  applyLanguages();
 
   applyDoNotTrack();
 
@@ -1122,18 +1252,91 @@ function openOnboarding() {
 function refreshNewtab(wc) {
   if (!wc || wc.isDestroyed() || wc.getURL() !== NEWTAB_URL) return;
   const engine = ENGINES[settings.searchEngine] || ENGINES.google;
-  const data = { theme: getWs()?.theme, engine: { name: engine.name, url: engine.url }, essentials: essentials.slice(0, 12) };
+  const data = { theme: getWs()?.theme, engine: { name: engine.name, url: engine.url }, essentials: withIcons(essentials.slice(0, 12)), clock: settings.clock };
   wc.executeJavaScript(`window.essentialInit && window.essentialInit(${JSON.stringify(data)})`).catch(() => {});
 }
 
-// Плитки новой вкладки просят добавить/убрать сайт переходом на essential-action:… — принимаем только от неё
+// Плитки и часы новой вкладки просят браузер переходом на essential-action:… — принимаем только от неё
 function handleNewtabAction(wc, url) {
-  if (wc.getURL() !== NEWTAB_URL) return;
   const u = new URL(url);
+  if (wc.getURL().startsWith(WARN_URL)) return handleWarningAction(wc, u);
+  if (wc.getURL() !== NEWTAB_URL) return;
+  if (u.pathname === 'clock') {
+    const c = { ...settings.clock };
+    for (const key of Object.keys(CLOCK_OPTIONS)) {
+      const v = u.searchParams.get(key);
+      if (v == null) continue;
+      if (typeof DEFAULT_SETTINGS.clock[key] === 'boolean') c[key] = v === '1';
+      else if (CLOCK_OPTIONS[key].includes(v)) c[key] = v;
+    }
+    setSetting('clock', c);
+    return refreshNewtab(wc);
+  }
   const target = u.searchParams.get('url') || '';
   if (!/^https?:\/\//i.test(target)) return;
   if (u.pathname === 'add') addEssential(target, u.searchParams.get('title') || target);
   else if (u.pathname === 'remove') removeEssential(target);
+}
+
+// ---------- сайты без сертификата ----------
+// Как в Chrome: на сайт с неправильным сертификатом или вовсе без HTTPS сначала показываем предупреждение
+// «Подключение не защищено» и спрашиваем, точно ли туда идти.
+const WARN_URL = pathToFileURL(path.join(__dirname, 'warning.html')).href;
+const certAllowed = new Set(); // «всё равно перейти» с битым сертификатом — до закрытия браузера, как в Chrome
+const warnUrl = (kind, target, error = '') => `${WARN_URL}?${new URLSearchParams({ kind, url: target, error })}`;
+
+// роутеры, локальные серверы и сеть дома — без предупреждений: там HTTPS обычно и не бывает
+function isLocalHost(host) {
+  return !host.includes('.') || /\.(local|lan|home|internal|localhost|test|arpa)$/i.test(host)
+    || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) || host === '[::1]' || host === 'localhost';
+}
+
+function needsHttpWarning(url) {
+  if (!settings.httpsWarning || !url.startsWith('http:')) return false;
+  const host = hostOf(url);
+  return !!host && !isLocalHost(host) && !settings.httpAllowed.includes(host);
+}
+
+function handleWarningAction(wc, u) {
+  const target = u.searchParams.get('url') || '';
+  if (u.pathname === 'back') {
+    // назад — на последнюю страницу до опасного сайта (в истории может остаться и его страница ошибки)
+    const nav = wc.navigationHistory;
+    const entries = nav.getAllEntries();
+    for (let i = nav.getActiveIndex() - 1; i >= 0; i--) {
+      if (entries[i].url !== target && !entries[i].url.startsWith(WARN_URL)) return nav.goToIndex(i);
+    }
+    return wc.loadURL(NEWTAB_URL);
+  }
+  if (!/^https?:\/\//i.test(target)) return;
+  const host = hostOf(target);
+  if (u.pathname === 'proceed') {
+    if (target.startsWith('https:')) certAllowed.add(host);
+    else setSetting('httpAllowed', [...settings.httpAllowed.filter((h) => h !== host), host].slice(-500));
+    wc.loadURL(target);
+  } else if (u.pathname === 'https') {
+    wc.loadURL(target.replace(/^http:/, 'https:'));
+  }
+}
+
+app.on('certificate-error', (event, wc, url, _error, _cert, callback) => {
+  if (certAllowed.has(hostOf(url))) {
+    event.preventDefault();
+    callback(true);
+  } else callback(false);
+});
+
+function watchSecurity(wc) {
+  const check = (url, isMainFrame, isInPlace) => {
+    if (!isMainFrame || isInPlace || !needsHttpWarning(url)) return;
+    setImmediate(() => { if (!wc.isDestroyed()) wc.loadURL(warnUrl('http', url)); });
+  };
+  wc.on('did-start-navigation', (_e, url, isInPlace, isMainFrame) => check(url, isMainFrame, isInPlace));
+  wc.on('did-redirect-navigation', (_e, url, isInPlace, isMainFrame) => check(url, isMainFrame, isInPlace));
+  // ошибки сертификата у Chromium — коды от -200 до -299
+  wc.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
+    if (isMainFrame && code <= -200 && code > -300) wc.loadURL(warnUrl('cert', url, desc));
+  });
 }
 
 // ---------- прочее ----------
@@ -1141,7 +1344,9 @@ function handleNewtabAction(wc, url) {
 function zoom(delta) {
   const wc = activeWc();
   if (!wc) return;
-  wc.setZoomLevel(delta === 0 ? 0 : Math.max(-5, Math.min(5, wc.getZoomLevel() + delta)));
+  // Ctrl+0 возвращает масштаб по умолчанию из настроек, а не обязательно 100%
+  const base = Math.log(settings.defaultZoom / 100) / Math.log(1.2);
+  wc.setZoomLevel(delta === 0 ? base : Math.max(-5, Math.min(5, wc.getZoomLevel() + delta)));
   sendState();
 }
 
@@ -1337,7 +1542,7 @@ function showTabMenu(id) {
 
 // ---------- сессия ----------
 
-function saveSession() {
+function saveSession(withHistory = true) {
   writeJson('session.json', {
     activeWs: workspaces.findIndex((w) => w.id === activeWs),
     compact,
@@ -1357,7 +1562,8 @@ function saveSession() {
       };
     }),
   });
-  writeJson('history.json', history);
+  // история и так сохраняется сама через пару секунд после посещения, здесь — только при выходе
+  if (withHistory) writeJson('history.json', history);
 }
 
 function restoreSession() {
@@ -1681,6 +1887,29 @@ handle('spotlight:suggest', suggest);
 
 on('panel:open', openPanel);
 on('panel:close', () => hideOverlay('panel', 260));
+// Шрифты для chrome://settings/fonts — семейства из реестра Windows (системные и установленные пользователем)
+let fontCache = null;
+function systemFonts() {
+  if (fontCache) return fontCache;
+  const keys = ['HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', 'HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts'];
+  const STYLE = /\s+(Regular|Bold|Italic|Oblique|Light|Semilight|SemiLight|Semibold|SemiBold|Black|Heavy|Thin|ExtraLight|ExtraBold|Medium|Condensed|Narrow|Variable|Display|Text)\b.*$/i;
+  fontCache = Promise.all(keys.map((k) => new Promise((resolve) => {
+    require('child_process').execFile('reg', ['query', k], { windowsHide: true }, (_err, out) => resolve(out || ''));
+  }))).then((outs) => {
+    const names = new Set();
+    for (const line of outs.join('\n').split(/\r?\n/)) {
+      const m = line.match(/^\s{4}(.+?)\s+REG_SZ\s/);
+      if (!m) continue;
+      for (const part of m[1].replace(/\s*\((TrueType|OpenType|All res)\)\s*$/i, '').split(' & ')) {
+        const fam = part.replace(STYLE, '').trim();
+        if (fam && !/^@/.test(fam)) names.add(fam);
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b));
+  });
+  return fontCache;
+}
+
 async function dataCounts() {
   const ses = session.defaultSession;
   return {
@@ -1689,6 +1918,7 @@ async function dataCounts() {
     bookmarks: bookmarks.length,
     cache: await ses.getCacheSize(),
     cookies: (await ses.cookies.get({})).length,
+    autofill: Object.values(autofill).reduce((n, list) => n + list.length, 0),
   };
 }
 
@@ -1704,10 +1934,20 @@ handle('panel:get', async () => {
     icons: ICONS,
     versions: { chromium: process.versions.chrome, electron: process.versions.electron, app: app.getVersion() },
     counts: await dataCounts(),
+    fonts: await systemFonts(),
     system: { isDefault: isDefaultBrowser(), autostart: getAutostart() },
   };
 });
 on('panel:set', setSetting);
+// автозаполнение спрашивают сами страницы — отвечаем только обычным вкладкам и их окнам входа, не приватным
+const autofillSender = (wc) => {
+  if (!wc.session.isPersistent()) return false; // приватный сеанс живёт только в памяти
+  const owner = BrowserWindow.fromWebContents(wc);
+  return !!tabByWc(wc) || (!!owner && owner !== win);
+};
+ipcMain.on('autofill:save', (e, kind, value) => { if (autofillSender(e.sender)) autofillSave(kind, value); });
+ipcMain.handle('autofill:query', (e, kind, prefix) => (autofillSender(e.sender) ? autofillQuery(kind, prefix) : []));
+ipcMain.on('autofill:remove', (e, kind, value) => { if (autofillSender(e.sender)) autofillRemove(kind, value); });
 on('panel:theme', (theme) => updateWorkspace(activeWs, { theme }));
 handle('panel:clear', clearData);
 handle('panel:counts', dataCounts);
@@ -1745,6 +1985,8 @@ app.whenReady().then(() => {
   ]);
   history = readJson('history.json', []);
   searches = readJson('searches.json', []);
+  favicons = new Map(Object.entries(readJson('favicons.json', {})));
+  autofill = readJson('autofill.json', {});
   bookmarks = readJson('bookmarks.json', []);
   sitePerms = readJson('site-permissions.json', {});
   setupSession();

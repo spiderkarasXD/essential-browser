@@ -39,12 +39,76 @@
     #bg { transition: opacity .6s ease; }
     #grain { z-index: -1; pointer-events: none; }
 
+    /* ---------- часы: стили как на экране блокировки OriginOS / ColorOS ---------- */
+    .clock { position: relative; cursor: pointer; border-radius: 22px; padding: 4px 18px; transition: background .2s ease; }
+    .clock:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+    .clock:hover::after {
+      content: 'Настроить часы'; position: absolute; left: 50%; bottom: -24px; transform: translateX(-50%);
+      font-size: 12px; color: var(--muted); white-space: nowrap;
+    }
     .time {
       font: 200 88px/1 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
       letter-spacing: -.03em;
       font-variant-numeric: tabular-nums;
+      text-align: center;
+      color: var(--text);
     }
+    .time .sec { font-size: .42em; opacity: .55; margin-left: .12em; letter-spacing: 0; }
+    .time .ampm { font-size: .28em; opacity: .6; margin-left: .2em; letter-spacing: .02em; font-weight: 500; }
+    .s-bold .time { font-weight: 800; font-size: 96px; letter-spacing: -.05em; }
+    .s-stacked .time { font-weight: 900; font-size: 128px; line-height: .84; letter-spacing: -.06em; display: flex; flex-direction: column; align-items: center; }
+    .s-stacked .time .sec { font-size: .3em; margin: .25em 0 0; }
+    .s-outline .time { font-weight: 800; font-size: 104px; letter-spacing: -.03em; color: transparent !important; -webkit-text-stroke: 2px var(--clock-ink, var(--text)); }
+    .s-mono .time { font: 300 80px/1 "Cascadia Mono", Consolas, monospace; letter-spacing: -.02em; }
+    .s-hidden .time { display: none; }
+    .s-hidden .clock { padding: 0; }
+    .s-hidden .clock:hover::after { bottom: -20px; }
+    .c-accent .time { color: var(--accent, #2f7bff); --clock-ink: var(--accent, #2f7bff); }
+    .c-gradient .time { background: linear-gradient(135deg, var(--c1, #2f7bff), var(--c2, #16c2ff), var(--c3, var(--c2, #16c2ff))); -webkit-background-clip: text; background-clip: text; color: transparent; --clock-ink: var(--c1, #2f7bff); }
+    .c-gradient.s-outline .time { background: none; }
+    .analog { width: 150px; height: 150px; display: block; }
+    .analog .face { fill: color-mix(in srgb, var(--text) 6%, transparent); stroke: color-mix(in srgb, var(--text) 18%, transparent); stroke-width: 1.5; }
+    .analog .tick { stroke: color-mix(in srgb, var(--text) 45%, transparent); stroke-width: 2; stroke-linecap: round; }
+    .analog .hand { stroke: var(--text); stroke-linecap: round; }
+    .analog .hand.m { stroke-width: 4; }
+    .analog .hand.h { stroke-width: 6; }
+    .analog .hand.s { stroke: var(--accent, #2f7bff); stroke-width: 1.6; }
+    .c-accent .analog .hand.h, .c-accent .analog .hand.m { stroke: var(--accent, #2f7bff); }
+    .c-gradient .analog .hand.h { stroke: var(--c1, #2f7bff); }
+    .c-gradient .analog .hand.m { stroke: var(--c2, var(--c1, #2f7bff)); }
     .greet { margin-top: 10px; font-size: 18px; color: var(--muted); }
+    .no-date .greet { display: none; }
+
+    /* окно настройки часов */
+    #clock-pop {
+      position: fixed; left: 50%; top: 50%; z-index: 20; width: min(520px, calc(100vw - 32px));
+      padding: 20px; border-radius: 22px; background: rgba(28, 28, 35, .92); color: #f2f1f7;
+      box-shadow: 0 30px 80px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(255, 255, 255, .08);
+      backdrop-filter: blur(30px);
+      opacity: 0; pointer-events: none; transform: translate(-50%, -46%) scale(.96);
+      transition: opacity .2s ease, transform .35s var(--ease);
+    }
+    #clock-pop.open { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
+    #clock-pop h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+    #clock-pop h4 { margin: 16px 0 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: rgba(242, 241, 247, .5); }
+    .styles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .styles button, .colors button, .opts button {
+      font: inherit; color: inherit; border: 0; cursor: pointer; border-radius: 12px;
+      background: rgba(255, 255, 255, .06); transition: background .15s ease, box-shadow .15s ease;
+    }
+    .styles button { height: 74px; display: grid; place-items: center; padding: 6px; overflow: hidden; }
+    .styles button:hover, .colors button:hover, .opts button:hover { background: rgba(255, 255, 255, .11); }
+    .styles button.on, .colors button.on, .opts button.on { box-shadow: inset 0 0 0 2px var(--accent, #2f7bff); background: rgba(255, 255, 255, .1); }
+    .styles .pv { font-size: 22px; line-height: 1; }
+    .styles .pv.thin { font-weight: 200; }
+    .styles .pv.bold { font-weight: 800; letter-spacing: -.04em; }
+    .styles .pv.stacked { font-weight: 900; font-size: 18px; line-height: .85; display: flex; flex-direction: column; align-items: center; letter-spacing: -.05em; }
+    .styles .pv.outline { font-weight: 800; color: transparent; -webkit-text-stroke: 1px #f2f1f7; }
+    .styles .pv.mono { font-family: "Cascadia Mono", Consolas, monospace; font-weight: 300; font-size: 20px; }
+    .styles .lbl { font-size: 11px; color: rgba(242, 241, 247, .55); margin-top: 6px; }
+    .colors, .opts { display: flex; flex-wrap: wrap; gap: 8px; }
+    .colors button, .opts button { padding: 8px 14px; display: flex; align-items: center; gap: 8px; }
+    .colors i { width: 14px; height: 14px; border-radius: 50%; display: block; }
 
     form { position: relative; width: min(640px, 100%); margin-top: 38px; }
     .search {
@@ -205,8 +269,17 @@
   <div id="bg"></div>
   <div id="grain"></div>
 
-  <div class="time rise" id="time"></div>
+  <div class="clock rise" id="clock" title="Настроить часы"><div class="time" id="time"></div></div>
   <div class="greet rise" id="greet" style="animation-delay: .06s"></div>
+  <div id="clock-pop">
+    <h3>Часы</h3>
+    <h4>Стиль</h4>
+    <div class="styles" id="clock-styles"></div>
+    <h4>Цвет</h4>
+    <div class="colors" id="clock-colors"></div>
+    <h4>Показывать</h4>
+    <div class="opts" id="clock-opts"></div>
+  </div>
 
   <form id="form" class="rise" style="animation-delay: .12s">
     <div class="search">
@@ -229,20 +302,118 @@
     </div>
   </form>
 
+  <script src="favicon.js"></script>
   <script src="theme.js"></script>
   <script>
     let engine = { name: 'Google', url: 'https://www.google.com/search?q=' };
 
     const pad = (n) => String(n).padStart(2, '0');
+    // настройки часов приходят от браузера (essentialInit), меняются в окне по клику на часы
+    let clock = { style: 'thin', color: 'white', seconds: false, h12: false, date: true };
+    const STYLES = [['thin', 'Тонкий'], ['bold', 'Жирный'], ['stacked', 'Столбиком'], ['outline', 'Контур'], ['mono', 'Моно'], ['analog', 'Стрелки'], ['hidden', 'Скрыть']];
+    const COLORS = [['white', 'Белый'], ['accent', 'Цвет темы'], ['gradient', 'Градиент']];
+    const OPTS = [['seconds', 'Секунды'], ['h12', '12 часов'], ['date', 'Приветствие и дата']];
+
+    function parts(d) {
+      let h = d.getHours();
+      const ampm = clock.h12 ? (h < 12 ? 'AM' : 'PM') : '';
+      if (clock.h12) h = h % 12 || 12;
+      return { h: clock.h12 ? String(h) : pad(h), m: pad(d.getMinutes()), s: pad(d.getSeconds()), ampm };
+    }
+
+    function analog(d) {
+      const ticks = Array.from({ length: 12 }, (_, i) => {
+        const a = (i * Math.PI) / 6;
+        const r1 = i % 3 ? 62 : 56;
+        return `<line class="tick" x1="${75 + Math.sin(a) * r1}" y1="${75 - Math.cos(a) * r1}" x2="${75 + Math.sin(a) * 67}" y2="${75 - Math.cos(a) * 67}"/>`;
+      }).join('');
+      const hand = (cls, angle, len) => `<line class="hand ${cls}" x1="75" y1="75" x2="${75 + Math.sin(angle) * len}" y2="${75 - Math.cos(angle) * len}"/>`;
+      const s = d.getSeconds();
+      const m = d.getMinutes() + s / 60;
+      const h = (d.getHours() % 12) + m / 60;
+      return `<svg class="analog" viewBox="0 0 150 150"><circle class="face" cx="75" cy="75" r="72"/>${ticks}`
+        + hand('h', (h * Math.PI) / 6, 36) + hand('m', (m * Math.PI) / 30, 54)
+        + (clock.seconds ? hand('s', (s * Math.PI) / 30, 60) : '') + '<circle cx="75" cy="75" r="4" fill="currentColor"/></svg>';
+    }
+
     function tick() {
       const d = new Date();
-      document.getElementById('time').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      const t = document.getElementById('time');
+      const p = parts(d);
+      const sec = clock.seconds ? `<span class="sec">${p.s}</span>` : '';
+      const ampm = p.ampm ? `<span class="ampm">${p.ampm}</span>` : '';
+      if (clock.style === 'analog') t.innerHTML = analog(d);
+      else if (clock.style === 'stacked') t.innerHTML = `<span>${p.h}</span><span>${p.m}</span>${sec}${ampm}`;
+      else t.innerHTML = `${p.h}:${p.m}${sec}${ampm}`;
       const h = d.getHours();
       const hello = h < 5 ? 'Доброй ночи' : h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
       const date = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
       document.getElementById('greet').textContent = `${hello} · ${date}`;
     }
-    tick();
+
+    function applyClock() {
+      const b = document.body.classList;
+      for (const [s] of STYLES) b.toggle('s-' + s, clock.style === s);
+      for (const [c] of COLORS) b.toggle('c-' + c, clock.color === c);
+      b.toggle('no-date', !clock.date);
+      tick();
+      renderClockPop();
+    }
+
+    function setClock(patch) {
+      clock = { ...clock, ...patch };
+      applyClock();
+      const q = Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, typeof v === 'boolean' ? (v ? '1' : '0') : v]));
+      ask('clock', q); // браузер запоминает выбор для всех новых вкладок
+    }
+
+    function renderClockPop() {
+      const p = parts(new Date());
+      document.getElementById('clock-styles').replaceChildren(...STYLES.map(([id, label]) => {
+        const b = document.createElement('button');
+        b.className = clock.style === id ? 'on' : '';
+        const pv = document.createElement('div');
+        pv.className = 'pv ' + id;
+        if (id === 'stacked') pv.innerHTML = `<span>${p.h}</span><span>${p.m}</span>`;
+        else if (id === 'analog') pv.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/></svg>';
+        else if (id === 'hidden') pv.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.4 5.2A9.7 9.7 0 0 1 12 5c5 0 9 4.5 10 7-.4 1-1.3 2.4-2.6 3.6M6.1 6.1C4 7.5 2.6 9.6 2 12c1 2.5 5 7 10 7 1.9 0 3.6-.6 5-1.5"/></svg>';
+        else pv.textContent = `${p.h}:${p.m}`;
+        const l = document.createElement('div');
+        l.className = 'lbl';
+        l.textContent = label;
+        const wrap = document.createElement('div');
+        wrap.append(pv, l);
+        wrap.style.cssText = 'display: flex; flex-direction: column; align-items: center';
+        b.append(wrap);
+        b.onclick = () => setClock({ style: id });
+        return b;
+      }));
+      const sw = { white: 'var(--text)', accent: 'var(--accent, #2f7bff)', gradient: 'linear-gradient(135deg, var(--c1, #2f7bff), var(--c2, #16c2ff))' };
+      document.getElementById('clock-colors').replaceChildren(...COLORS.map(([id, label]) => {
+        const b = document.createElement('button');
+        b.className = clock.color === id ? 'on' : '';
+        b.innerHTML = `<i style="background: ${sw[id]}"></i>`;
+        b.append(label);
+        b.onclick = () => setClock({ color: id });
+        return b;
+      }));
+      document.getElementById('clock-opts').replaceChildren(...OPTS.map(([id, label]) => {
+        const b = document.createElement('button');
+        b.className = clock[id] ? 'on' : '';
+        b.textContent = (clock[id] ? '✓ ' : '') + label;
+        b.onclick = () => setClock({ [id]: !clock[id] });
+        return b;
+      }));
+    }
+
+    const pop = document.getElementById('clock-pop');
+    document.getElementById('clock').addEventListener('click', () => {
+      renderClockPop();
+      pop.classList.add('open');
+      shade.classList.add('open');
+    });
+
+    applyClock();
     setInterval(tick, 1000);
 
     function looksLikeUrl(s) {
@@ -280,14 +451,12 @@
         });
         const ico = document.createElement('div');
         ico.className = 'ico';
-        const img = new Image();
-        img.src = origin(e.url) + '/favicon.ico';
-        img.onerror = () => {
+        const img = loadFavicon(new Image(), e.url, e.icon, () => {
           const l = document.createElement('div');
           l.className = 'letter';
           l.textContent = (e.title || '?').trim().charAt(0).toUpperCase();
           img.replaceWith(l);
-        };
+        });
         ico.append(img);
         const span = document.createElement('span');
         span.textContent = e.title;
@@ -316,6 +485,7 @@
     }
     function closeForm() {
       form.classList.remove('open');
+      pop.classList.remove('open');
       shade.classList.remove('open');
     }
     shade.addEventListener('click', closeForm);
@@ -333,7 +503,9 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeForm(); });
 
     // Вызывается браузером: тема пространства, поисковик и закреплённые сайты
-    window.essentialInit = ({ theme, engine: eng, essentials }) => {
+    window.essentialInit = ({ theme, engine: eng, essentials, clock: c }) => {
+      if (c) { clock = { ...clock, ...c }; applyClock(); }
+      if (theme) theme.colors.forEach((col, i) => document.documentElement.style.setProperty(`--c${i + 1}`, col));
       if (eng) {
         engine = eng;
         document.getElementById('engine').textContent = eng.name;

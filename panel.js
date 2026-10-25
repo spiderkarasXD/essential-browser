@@ -37,6 +37,17 @@ function setSetting(key, value) {
 
 // ---------- Внешний вид ----------
 
+// Два вида новой вкладки с мини-превью: страница с часами и плитками или всплывающая строка поиска
+function newTabChoice(value, onpick) {
+  const card = (id, title, hint, mock) => h('button.nt' + (value === id ? '.on' : ''), { onclick: () => onpick(id) },
+    h('div.nt-mock', { html: mock }), h('div.nt-title', {}, title), h('div.nt-hint', {}, hint));
+  return h('div.nt-grid', {},
+    card('page', 'Страница', 'Часы, поиск и закреплённые сайты',
+      '<div class="m-clock">00:16</div><div class="m-bar"></div><div class="m-tiles"><i></i><i></i><i></i><i></i></div>'),
+    card('spotlight', 'Строка поиска', 'Всплывает поверх, как в Arc',
+      '<div class="m-pop"><div class="m-bar"></div><div class="m-row"></div><div class="m-row"></div><div class="m-row short"></div></div>'));
+}
+
 function renderAppearance() {
   const ws = data.workspace;
   const t = ws.theme;
@@ -62,7 +73,7 @@ function renderAppearance() {
     t.colors.map((c, i) => h('div.color', {},
       h('input', { type: 'color', value: c, oninput: (e) => { t.colors[i] = e.target.value; panel.setTheme(t); preview.style.background = themeBackground(t); }, onchange: () => update({}) }),
       t.colors.length > 1 && h('button.rm', { title: 'Убрать цвет', onclick: () => update({ colors: t.colors.filter((_, j) => j !== i) }) }, '×'))),
-    t.colors.length < 3 && h('button.add-color', { title: 'Добавить цвет', onclick: () => update({ colors: [...t.colors, t.colors[t.colors.length - 1]] }) }, '+'));
+    t.colors.length < 4 && h('button.add-color', { title: 'Добавить цвет', onclick: () => update({ colors: [...t.colors, t.colors[t.colors.length - 1]] }) }, '+'));
 
   const range = (label, key) => h('div.row', {},
     h('div.label', { style: 'flex: 0 0 120px' }, label),
@@ -80,9 +91,12 @@ function renderAppearance() {
     h('h2', {}, 'Внешний вид'),
     h('p.lead', {}, `Тема для пространства ${ws.icon} ${ws.name}. У каждого пространства своя тема, как в Zen.`),
     preview,
+    h('h3', {}, 'Новая вкладка (Ctrl+T)'),
+    newTabChoice(data.settings.newTabStyle, (v) => { setSetting('newTabStyle', v); render(); }),
+    h('p.hint', { style: 'margin: 8px 2px 0' }, 'Часы на странице новой вкладки настраиваются щелчком по ним: стиль, цвет, секунды.'),
     h('h3', {}, 'Готовые градиенты'),
     presets,
-    h('h3', {}, 'Свои цвета (до трёх)'),
+    h('h3', {}, 'Свои цвета (до четырёх)'),
     colorInputs,
     h('h3', {}, 'Настройка'),
     h('div.card', {},
@@ -141,6 +155,7 @@ function renderPrivacy() {
     { key: 'searches', title: 'Поисковые запросы', meta: plural(c.searches, 'запрос', 'запроса', 'запросов'), icon: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>' },
     { key: 'cache', title: 'Кэш', meta: mb(c.cache), icon: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>' },
     { key: 'cookies', title: 'Cookies и данные сайтов', meta: `${plural(c.cookies, 'cookie', 'cookie', 'cookie')} · выйдет из аккаунтов`, icon: '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9 3 3 0 0 0 4 4 3 3 0 0 0 5 5z"/><circle cx="8.5" cy="10.5" r="1"/><circle cx="14" cy="15" r="1"/><circle cx="9" cy="16" r="1"/></svg>' },
+    { key: 'autofill', title: 'Автозаполнение', meta: plural(c.autofill, 'значение', 'значения', 'значений'), icon: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 10h6M7 14h3M16 13l1.5 1.5L20 12"/></svg>' },
   ];
   const picked = new Set(['history', 'cache']);
   const button = h('button.btn.danger', {}, 'Очистить выбранное');
@@ -177,7 +192,16 @@ function renderPrivacy() {
     h('h2', {}, 'Конфиденциальность'),
     h('p.lead', {}, 'Отслеживание, разрешения сайтов и очистка данных.'),
     h('div.card', {},
-      toggleRow('Отправлять «Не отслеживать»', 'Заголовки DNT и Global Privacy Control', s.doNotTrack, (v) => setSetting('doNotTrack', v))),
+      toggleRow('Отправлять «Не отслеживать»', 'Заголовки DNT и Global Privacy Control', s.doNotTrack, (v) => setSetting('doNotTrack', v)),
+      toggleRow('Предупреждать о сайтах без HTTPS', 'Перед сайтом без сертификата спросит, точно ли туда идти. Роутеры и домашняя сеть — без вопросов', s.httpsWarning, (v) => setSetting('httpsWarning', v)),
+      s.httpAllowed.length > 0 && h('div.row', {},
+        h('div.label', {}, 'Разрешённые сайты без HTTPS', h('div.hint', {}, s.httpAllowed.slice(-4).join(', ') + (s.httpAllowed.length > 4 ? ` и ещё ${s.httpAllowed.length - 4}` : ''))),
+        h('button.btn', { onclick: () => { setSetting('httpAllowed', []); render(); } }, 'Сбросить'))),
+    h('h3', {}, 'Автозаполнение'),
+    h('div.card', {},
+      toggleRow('Запоминать данные форм', 'Почта, имя, телефон, адрес — подсказываются в полях на сайтах, как в Chrome. Пароли и карты не сохраняются', s.autofill, (v) => setSetting('autofill', v)),
+      h('div.row', {}, h('div.label', {}, 'Сохранено', h('div.hint', {}, plural(c.autofill, 'значение', 'значения', 'значений'))),
+        h('button.btn', { onclick: async () => { await panel.clear({ autofill: true }); data.counts.autofill = 0; render(); } }, 'Очистить'))),
     h('h3', {}, 'Разрешения сайтов'),
     h('div.card', {}, perm('notifications', 'Уведомления'), perm('media', 'Камера и микрофон'), perm('geolocation', 'Местоположение')),
     h('h3', {}, 'Очистить данные'),
@@ -307,6 +331,52 @@ function renderDownloads() {
 
 // ---------- Chromium ----------
 
+// Как chrome://settings/fonts и /languages: шрифты, размеры, масштаб страниц и язык сайтов
+const ZOOMS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
+const LANGS = [
+  ['ru-RU,ru,en-US,en', 'Русский, затем английский'],
+  ['en-US,en,ru-RU,ru', 'Английский, затем русский'],
+  ['ru-RU,ru', 'Только русский'],
+  ['en-US,en', 'Только английский'],
+  ['uk-UA,uk,ru-RU,ru,en-US,en', 'Українська, русский, английский'],
+  ['be-BY,be,ru-RU,ru,en-US,en', 'Беларуская, русский, английский'],
+  ['kk-KZ,kk,ru-RU,ru,en-US,en', 'Қазақ тілі, русский, английский'],
+  ['de-DE,de,en-US,en', 'Немецкий, английский'],
+];
+
+function renderFonts(s) {
+  const fontSelect = (key) => h('select', { style: 'max-width: 240px', onchange: (e) => setSetting(key, e.target.value) },
+    h('option', { value: '', selected: !s[key] }, 'По умолчанию'),
+    (data.fonts || []).map((f) => h('option', { value: f, selected: s[key] === f, style: `font-family: "${f}"` }, f)));
+  const size = (key, label, min, max, hint) => h('div.row', {},
+    h('div.label', { style: 'flex: 0 0 200px' }, label, hint && h('div.hint', {}, hint)),
+    h('div.range-row', { style: 'flex: 1' },
+      h('input', { type: 'range', min, max, value: s[key], oninput: (e) => { e.target.nextSibling.textContent = e.target.value === '0' ? 'нет' : e.target.value + ' px'; }, onchange: (e) => setSetting(key, +e.target.value) }),
+      h('span.val', {}, s[key] === 0 ? 'нет' : s[key] + ' px')));
+  const sample = h('div.font-sample', { style: `font-size: ${s.fontSize}px; font-family: ${s.fontStandard ? `"${s.fontStandard}"` : 'serif'}` },
+    'Съешь же ещё этих мягких французских булок, да выпей чаю. The quick brown fox.');
+  return [
+    h('h3', {}, 'Шрифты и масштаб'),
+    h('p.hint', { style: 'margin: -4px 2px 10px' }, 'Как в chrome://settings/fonts. Применяется к новым вкладкам и после перезагрузки страницы.'),
+    h('div.card', {},
+      h('div.row', {}, h('div.label', {}, 'Масштаб страниц'),
+        h('select', { onchange: (e) => setSetting('defaultZoom', +e.target.value) }, ZOOMS.map((z) => h('option', { value: z, selected: s.defaultZoom === z }, z + '%')))),
+      size('fontSize', 'Размер шрифта', 9, 32),
+      size('monoFontSize', 'Моноширинный шрифт', 9, 32),
+      size('minFontSize', 'Минимальный размер', 0, 24, 'Мельче сайты писать не смогут'),
+      h('div.row', {}, h('div.label', {}, 'Стандартный шрифт'), fontSelect('fontStandard')),
+      h('div.row', {}, h('div.label', {}, 'С засечками (Serif)'), fontSelect('fontSerif')),
+      h('div.row', {}, h('div.label', {}, 'Без засечек (Sans-serif)'), fontSelect('fontSans')),
+      h('div.row', {}, h('div.label', {}, 'Моноширинный'), fontSelect('fontMono')),
+      h('div.row', { style: 'display: block' }, sample)),
+    h('h3', {}, 'Языки'),
+    h('div.card', {},
+      h('div.row', {}, h('div.label', {}, 'Язык сайтов', h('div.hint', {}, 'На каком языке сайты показывают себя (Accept-Language)')),
+        h('select', { onchange: (e) => setSetting('languages', e.target.value) },
+          (LANGS.some(([v]) => v === s.languages) ? LANGS : [[s.languages, s.languages], ...LANGS]).map(([v, l]) => h('option', { value: v, selected: s.languages === v }, l))))),
+  ];
+}
+
 function renderSystem() {
   const s = data.settings;
   return [
@@ -321,6 +391,7 @@ function renderSystem() {
       toggleRow('Тёмная тема для всех сайтов', 'Chromium сам затемняет светлые страницы (Force Dark)', s.forceDarkSites, (v) => setSetting('forceDarkSites', v), true),
       toggleRow('Проверка орфографии', 'Русский и английский', s.spellcheck, (v) => setSetting('spellcheck', v)),
       toggleRow('Восстанавливать вкладки при запуске', null, s.restoreSession, (v) => setSetting('restoreSession', v))),
+    ...renderFonts(s),
     h('h3', {}, 'Windows'),
     h('div.card', {},
       h('div.row', {},

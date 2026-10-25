@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Подключение не защищено</title>
+  <style>
+    :root { --text: #ecebf2; --muted: rgba(236, 235, 242, .6); --warn: #ff8a3d; --bad: #ff5d62; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--accent, var(--warn)) 22%, transparent), transparent 70%), #121218;
+      color: var(--text);
+      font: 14px/1.55 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    }
+    .card {
+      width: min(560px, 100%);
+      padding: 34px 34px 28px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, .045);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 30px 80px rgba(0, 0, 0, .45);
+      animation: rise .5s cubic-bezier(.22, 1, .36, 1) both;
+    }
+    @keyframes rise { from { opacity: 0; transform: translateY(12px) scale(.98); } }
+    .icon {
+      width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center;
+      background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+    }
+    .icon svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { margin: 20px 0 8px; font-size: 24px; font-weight: 650; letter-spacing: -.01em; }
+    p { margin: 0 0 10px; color: var(--muted); }
+    .host { color: var(--text); font-weight: 600; word-break: break-all; }
+    details { margin-top: 14px; color: var(--muted); font-size: 12.5px; }
+    summary { cursor: pointer; width: fit-content; }
+    code { font: 12px Consolas, monospace; color: var(--text); background: rgba(255, 255, 255, .07); padding: 2px 6px; border-radius: 6px; word-break: break-all; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    button {
+      font: inherit; border: 0; cursor: pointer; padding: 10px 18px; border-radius: 12px; color: var(--text);
+      background: rgba(255, 255, 255, .08); transition: background .15s ease, transform .15s ease;
+    }
+    button:hover { background: rgba(255, 255, 255, .14); }
+    button:active { transform: scale(.97); }
+    button.primary { background: #2f7bff; color: #fff; font-weight: 600; }
+    button.primary:hover { background: #4a8dff; }
+    button.risky { margin-left: auto; background: none; color: var(--muted); }
+    button.risky:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M12 8v5M12 16.5v.01"/></svg></div>
+    <h1 id="title"></h1>
+    <p id="text"></p>
+    <p id="advice"></p>
+    <details id="more"><summary>Подробнее</summary><p style="margin-top: 8px">Адрес: <code id="addr"></code></p><p id="err"></p></details>
+    <div class="row">
+      <button class="primary" id="back">Вернуться в безопасное место</button>
+      <button id="https" hidden>Открыть по HTTPS</button>
+      <button class="risky" id="go">Всё равно перейти</button>
+    </div>
+  </div>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const kind = q.get('kind');
+    const url = q.get('url') || '';
+    let host = url;
+    try { host = new URL(url).host; } catch {}
+    const $ = (id) => document.getElementById(id);
+    const bold = (s) => { const b = document.createElement('span'); b.className = 'host'; b.textContent = s; return b; };
+
+    if (kind === 'cert') {
+      document.documentElement.style.setProperty('--accent', 'var(--bad)');
+      $('title').textContent = 'Подключение не защищено';
+      $('text').append('У сайта ', bold(host), ' неправильный сертификат. Возможно, злоумышленники пытаются украсть ваши данные (пароли, сообщения, номера карт).');
+      $('advice').textContent = 'Сертификат может быть просрочен, выдан другому сайту или вообще не подтверждён. Хотите точно зайти на этот сайт?';
+      $('err').textContent = 'Ошибка: ' + (q.get('error') || 'ERR_CERT_INVALID');
+    } else {
+      document.documentElement.style.setProperty('--accent', 'var(--warn)');
+      $('title').textContent = 'У сайта нет сертификата';
+      $('text').append('Сайт ', bold(host), ' работает без HTTPS. Всё, что вы вводите (пароли, сообщения, данные карт), передаётся открытым текстом и может быть перехвачено.');
+      $('advice').textContent = 'Хотите точно зайти на этот сайт?';
+      $('err').textContent = 'Отключить эти предупреждения можно в Настройках → Конфиденциальность.';
+      $('https').hidden = false;
+    }
+    $('addr').textContent = url;
+    document.title = (kind === 'cert' ? 'Подключение не защищено' : 'Нет сертификата') + ' — ' + host;
+
+    // страница не имеет доступа к браузеру, поэтому просит его через особый адрес — браузер перехватывает переход
+    const ask = (action) => { location.href = `essential-action:${action}?${new URLSearchParams({ url })}`; };
+    $('back').onclick = () => ask('back');
+    $('https').onclick = () => ask('https');
+    $('go').onclick = () => ask('proceed');
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') ask('back'); });
+  </script>
+</body>
+</html>

@@ -109,10 +109,7 @@ function renderSite() {
 
   const fav = $('#fav');
   fav.replaceChildren();
-  const img = new Image();
-  img.src = info.favicon || `${info.origin}/favicon.ico`;
-  img.onerror = () => { fav.textContent = info.host[0].toUpperCase(); };
-  fav.append(img);
+  fav.append(loadFavicon(new Image(), info.origin, info.favicon, () => { fav.textContent = (info.host || '?')[0].toUpperCase(); }));
 
   $('#zoom-val').textContent = info.zoom + '%';
   $('#sound').checked = !info.muted;

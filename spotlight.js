@@ -32,10 +32,7 @@ function iconFor(it) {
   if (ICON[it.type]) {
     ico.innerHTML = ICON[it.type];
   } else {
-    const img = new Image();
-    img.src = originOf(it.url) + '/favicon.ico';
-    img.onerror = () => { ico.innerHTML = ICON.page; };
-    ico.append(img);
+    ico.append(loadFavicon(new Image(), it.url, it.icon, () => { ico.innerHTML = ICON.page; }));
   }
   return ico;
 }

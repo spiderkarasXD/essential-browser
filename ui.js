@@ -18,14 +18,6 @@ function dot() {
   return d;
 }
 
-function favImg(src, fallback) {
-  const img = new Image();
-  img.src = src;
-  img.draggable = false;
-  img.onerror = () => img.replaceWith(fallback());
-  return img;
-}
-
 // ---------- вкладки ----------
 
 function makeTab(id) {
@@ -74,11 +66,16 @@ function clearDrop() {
   document.querySelectorAll('.drop-before, .drop-after, .drop').forEach((n) => n.classList.remove('drop-before', 'drop-after', 'drop'));
 }
 
-function setFavicon(el, url) {
+// иконка вкладки: своя иконка страницы, а пока её нет (вкладка спит или грузится) — иконка сайта по адресу
+function setFavicon(el, icon, pageUrl) {
   const fav = el.querySelector('.fav');
-  if (fav.dataset.src === (url || '')) return;
-  fav.dataset.src = url || '';
-  fav.replaceChildren(url ? favImg(url, dot) : dot());
+  const key = icon || originOf(pageUrl || '');
+  if (fav.dataset.src === key) return;
+  fav.dataset.src = key;
+  if (!icon && !/^https?:/.test(pageUrl || '')) return fav.replaceChildren(dot());
+  const img = new Image();
+  img.draggable = false;
+  fav.replaceChildren(loadFavicon(img, pageUrl, icon, () => img.replaceWith(dot())));
 }
 
 let shownWs = null;
@@ -134,7 +131,7 @@ function renderTabs() {
     el.querySelector('.cross').style.display = t.muted ? '' : 'none';
     el.querySelector('.title').textContent = t.title;
     el.title = t.url ? `${t.title}\n${t.url}` : t.title;
-    setFavicon(el, t.favicon);
+    setFavicon(el, t.favicon, t.url);
   });
   firstRender = false;
   tabEls.get(ws().activeTab)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -159,7 +156,9 @@ function renderEssentials() {
       b.className = 'ess';
       b.title = `${e.title}\n${e.url}`;
       b.dataset.origin = originOf(e.url);
-      b.append(favImg(`${originOf(e.url)}/favicon.ico`, letter(e.title)));
+      const img = new Image();
+      img.draggable = false;
+      b.append(loadFavicon(img, e.url, e.icon, () => img.replaceWith(letter(e.title)())));
       b.addEventListener('click', () => browser.openEssential(e.url));
       b.addEventListener('contextmenu', (ev) => { ev.preventDefault(); browser.essentialMenu(e.url); });
       return b;
@@ -174,17 +173,31 @@ function renderEssentials() {
   for (const b of essEl.querySelectorAll('.ess')) b.classList.toggle('active', b.dataset.origin === curOrigin);
 }
 
+// Закрепить вкладку перетаскиванием можно, только подержав её над закреплёнными: раньше вкладка закреплялась,
+// если при перестановке её случайно отпускали чуть выше списка вкладок
+const PIN_HOLD = 450;
+let pinHoverSince = 0;
 essEl.addEventListener('dragover', (e) => {
   if (dragTab == null) return;
   e.preventDefault();
-  essEl.classList.add('drop');
+  if (!pinHoverSince) pinHoverSince = performance.now();
+  const ready = performance.now() - pinHoverSince >= PIN_HOLD;
+  essEl.classList.toggle('drop', ready);
+  e.dataTransfer.dropEffect = ready ? 'link' : 'none';
 });
-essEl.addEventListener('dragleave', () => essEl.classList.remove('drop'));
+essEl.addEventListener('dragleave', (e) => {
+  if (essEl.contains(e.relatedTarget)) return;
+  essEl.classList.remove('drop');
+  pinHoverSince = 0;
+});
 essEl.addEventListener('drop', (e) => {
   e.preventDefault();
+  const ready = pinHoverSince && performance.now() - pinHoverSince >= PIN_HOLD;
   essEl.classList.remove('drop');
-  if (dragTab != null) browser.essentialFromTab(dragTab);
+  pinHoverSince = 0;
+  if (dragTab != null && ready) browser.essentialFromTab(dragTab);
 });
+document.addEventListener('dragend', () => { pinHoverSince = 0; essEl.classList.remove('drop'); });
 
 // ---------- рабочие пространства ----------
 

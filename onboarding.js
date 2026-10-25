@@ -49,7 +49,7 @@ const SVG = {
   globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
   power: '<svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>',
 };
-const eyebrow = (n) => h('div.eyebrow', {}, `Шаг ${n} из 4`);
+const eyebrow = (n) => h('div.eyebrow', {}, `Шаг ${n} из 5`);
 
 function setAurora(colors) {
   const [c1, c2, c3] = colors;
@@ -172,10 +172,31 @@ function themeStep() {
   return [
     eyebrow(3),
     h('h1', {}, 'Выберите настроение'),
-    h('p.sub', {}, 'Цвет пространства. Потом можно собрать свой градиент из трёх цветов.'),
+    h('p.sub', {}, 'Цвет пространства. Потом можно собрать свой градиент из четырёх цветов.'),
     preview,
     h('div', { style: 'width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px' }, swatches, seg),
     h('div.actions', {}, h('button.link', { onclick: () => go(2) }, 'Назад'), h('button.btn.primary', { onclick: () => go(4) }, 'Дальше')),
+  ];
+}
+
+// Ctrl+T: страница новой вкладки (часы, поиск, плитки) или всплывающая строка поиска поверх, как в Arc
+function newTabStep() {
+  const grid = h('div.nt-grid');
+  const card = (id, title, hint, mock) => h('button.option.nt' + (info.settings.newTabStyle === id ? '.on' : ''), {
+    onclick: () => { info.settings.newTabStyle = id; panel.set('newTabStyle', id); draw(); },
+  }, h('div.nt-mock', { html: mock }), h('div.name', {}, title), h('div.meta', {}, hint), tick());
+  const draw = () => grid.replaceChildren(
+    card('page', '1 · Страница', 'Часы, поиск и закреплённые сайты',
+      '<div class="m-clock">00:16</div><div class="m-sub">Доброй ночи · понедельник</div><div class="m-bar"></div><div class="m-tiles"><i></i><i></i><i></i><i></i><i></i></div>'),
+    card('spotlight', '2 · Строка поиска', 'Всплывает поверх, сразу с недавними запросами',
+      '<div class="m-pop"><div class="m-bar"></div><div class="m-row on"></div><div class="m-row"></div><div class="m-row"></div><div class="m-row short"></div></div>'));
+  draw();
+  return [
+    eyebrow(4),
+    h('h1', {}, 'Как открывать новую вкладку?'),
+    h('p.sub', {}, 'Что появится по Ctrl+T и кнопке «+». Поменять можно в настройках → Внешний вид.'),
+    grid,
+    h('div.actions', {}, h('button.link', { onclick: () => go(3) }, 'Назад'), h('button.btn.primary', { onclick: () => go(5) }, 'Дальше')),
   ];
 }
 
@@ -203,12 +224,12 @@ function systemStep() {
   tick());
 
   return [
-    eyebrow(4),
+    eyebrow(5),
     h('h1', {}, 'Сделать Essential главным?'),
     h('p.sub', {}, 'Можно пропустить — оба пункта есть в настройках.'),
     h('div.list', {}, def, auto),
     note,
-    h('div.actions', {}, h('button.link', { onclick: () => go(3) }, 'Назад'), h('button.btn.primary', { onclick: () => go(5) }, 'Дальше')),
+    h('div.actions', {}, h('button.link', { onclick: () => go(4) }, 'Назад'), h('button.btn.primary', { onclick: () => go(6) }, 'Дальше')),
   ];
 }
 
@@ -247,7 +268,7 @@ function finish() {
 
 // ---------- переходы ----------
 
-const STEPS = [intro, importStep, searchStep, themeStep, systemStep, doneStep];
+const STEPS = [intro, importStep, searchStep, themeStep, newTabStep, systemStep, doneStep];
 
 function go(n) {
   const back = n < step;
@@ -262,7 +283,7 @@ function go(n) {
   current = h('section.step.enter' + (back ? '.back' : ''), {}, ...STEPS[n]());
   stage.append(current);
   document.body.classList.toggle('intro', n === 0);
-  dotsEl.replaceChildren(...[1, 2, 3, 4, 5].map((i) => h('i' + (i === n ? '.on' : ''))));
+  dotsEl.replaceChildren(...[1, 2, 3, 4, 5, 6].map((i) => h('i' + (i === n ? '.on' : ''))));
 }
 
 document.addEventListener('keydown', (e) => {

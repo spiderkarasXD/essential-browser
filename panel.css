@@ -294,7 +294,46 @@ input[type="text"]:focus, select:focus { box-shadow: 0 0 0 2px var(--ws); }
 
 input[type="range"] { flex: 1; accent-color: var(--ws); }
 .range-row { display: flex; align-items: center; gap: 12px; }
-.range-row .val { width: 40px; text-align: right; color: var(--muted); }
+.range-row .val { width: 48px; text-align: right; color: var(--muted); white-space: nowrap; }
+
+/* выбор вида новой вкладки: две карточки с мини-превью */
+.nt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.nt {
+  padding: 10px 10px 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--line);
+  text-align: left;
+  transition: box-shadow .2s ease, background .2s ease, transform .2s ease;
+}
+.nt:hover { transform: translateY(-1px); }
+.nt.on { box-shadow: inset 0 0 0 2px var(--ws); background: color-mix(in srgb, var(--ws) 14%, transparent); }
+.nt-mock {
+  position: relative;
+  height: 96px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: radial-gradient(90% 90% at 0% 0%, color-mix(in srgb, var(--ws) 45%, transparent), transparent 70%), #17171d;
+}
+.nt-mock .m-clock { font-size: 20px; font-weight: 200; color: #fff; }
+.nt-mock .m-bar { width: 62%; height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .16); }
+.nt-mock .m-tiles { display: flex; gap: 5px; }
+.nt-mock .m-tiles i { width: 12px; height: 12px; border-radius: 4px; background: rgba(255, 255, 255, .14); }
+.nt-mock .m-pop { width: 78%; padding: 7px; border-radius: 8px; background: rgba(30, 30, 37, .95); box-shadow: 0 8px 20px rgba(0, 0, 0, .4); display: flex; flex-direction: column; gap: 5px; }
+.nt-mock .m-pop .m-bar { width: 100%; height: 9px; }
+.nt-mock .m-row { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .1); }
+.nt-mock .m-row:nth-child(2) { background: color-mix(in srgb, var(--ws) 55%, transparent); }
+.nt-mock .m-row.short { width: 60%; }
+.nt-title { font-weight: 600; }
+.nt-hint { margin-top: 2px; font-size: 12px; color: var(--muted); }
+.font-sample { padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, .04); line-height: 1.45; color: var(--text); }
 
 .seg { display: inline-flex; padding: 3px; border-radius: 10px; background: rgba(255, 255, 255, .07); }
 .seg button { border: 0; background: none; padding: 5px 14px; border-radius: 8px; }

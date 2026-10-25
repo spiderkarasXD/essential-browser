@@ -220,6 +220,35 @@ h1 {
 .grid4 .option .tick { position: absolute; top: 14px; right: 14px; }
 .grid4 .option { position: relative; }
 
+/* ---------- вид новой вкладки ---------- */
+.nt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: 100%; margin-top: 10px; }
+.option.nt { position: relative; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 12px 16px; }
+.option.nt .tick { position: absolute; top: 18px; right: 18px; }
+.nt-mock {
+  width: 100%;
+  height: 150px;
+  margin-bottom: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: radial-gradient(90% 90% at 0% 0%, color-mix(in srgb, var(--c1, #2f7bff) 50%, transparent), transparent 70%),
+    radial-gradient(90% 90% at 100% 100%, color-mix(in srgb, var(--c2, #16c2ff) 35%, transparent), transparent 70%), #15151b;
+}
+.nt-mock .m-clock { font-size: 34px; font-weight: 200; line-height: 1; color: #fff; }
+.nt-mock .m-sub { font-size: 10px; color: rgba(255, 255, 255, .55); margin-top: -4px; }
+.nt-mock .m-bar { width: 66%; height: 14px; border-radius: 7px; background: rgba(255, 255, 255, .16); }
+.nt-mock .m-tiles { display: flex; gap: 6px; }
+.nt-mock .m-tiles i { width: 16px; height: 16px; border-radius: 5px; background: rgba(255, 255, 255, .15); }
+.nt-mock .m-pop { width: 80%; padding: 9px; border-radius: 10px; background: rgba(28, 28, 35, .95); box-shadow: 0 10px 26px rgba(0, 0, 0, .45); display: flex; flex-direction: column; gap: 6px; }
+.nt-mock .m-pop .m-bar { width: 100%; height: 12px; margin-bottom: 2px; }
+.nt-mock .m-row { height: 9px; border-radius: 5px; background: rgba(255, 255, 255, .1); }
+.nt-mock .m-row.on { background: color-mix(in srgb, var(--c1, #2f7bff) 60%, transparent); }
+.nt-mock .m-row.short { width: 60%; }
+
 /* ---------- темы ---------- */
 .preview {
   position: relative;
