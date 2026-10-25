@@ -35,6 +35,10 @@
     <div class="tb-right">
       <span class="zoom" data-act="zoom" title="Сбросить масштаб (Ctrl+0)"></span>
       <div id="tb-ext"></div>
+      <!-- обновление скачано — «Обновить» перезапускает браузер в новую версию, как в Arc и Chrome -->
+      <button class="upd-btn" id="upd-btn" data-act="update" hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 19V6M6.5 11.5L12 6l5.5 5.5"/></svg><span>Обновить</span>
+      </button>
       <!-- кружок загрузок, как в Arc: кольцо заполняется по мере скачивания -->
       <button class="icon dl-btn" id="dl-btn" data-act="downloads" title="Загрузки (Ctrl+J)" hidden>
         <svg class="ring" viewBox="0 0 24 24">

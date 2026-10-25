@@ -50,6 +50,9 @@ contextBridge.exposeInMainWorld('browser', {
   onDownloads: (cb) => ipcRenderer.on('downloads', (_e, summary) => cb(summary)),
   openDownloads: send('dl:open'),
   onOpenDownloads: (cb) => ipcRenderer.on('ui:openDownloads', () => cb()),
+  onUpdate: (cb) => ipcRenderer.on('update', (_e, s) => cb(s)),
+  updateState: invoke('update:state'),
+  installUpdate: send('update:install'),
 });
 
 // Список загрузок (downloads.html)
@@ -122,6 +125,10 @@ contextBridge.exposeInMainWorld('panel', {
   pickFolder: invoke('panel:pickFolder'),
   openDownloads: send('panel:openDownloads'),
   restart: send('app:restart'),
+  onUpdate: (cb) => ipcRenderer.on('update', (_e, s) => cb(s)),
+  updateState: invoke('update:state'),
+  checkUpdate: send('update:check'),
+  installUpdate: send('update:install'),
   detectImport: invoke('import:detect'),
   runImport: invoke('import:run'),
   close: send('panel:close'),

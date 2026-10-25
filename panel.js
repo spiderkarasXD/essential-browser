@@ -37,6 +37,8 @@ function setSetting(key, value) {
 
 // ---------- Внешний вид ----------
 
+const CLOCK_STYLES = [['thin', 'Тонкий'], ['bold', 'Жирный'], ['stacked', 'Столбиком'], ['outline', 'Контур'], ['mono', 'Моно'], ['analog', 'Стрелки'], ['hidden', 'Скрыты']];
+
 // Два вида новой вкладки с мини-превью: страница с часами и плитками или всплывающая строка поиска
 function newTabChoice(value, onpick) {
   const card = (id, title, hint, mock) => h('button.nt' + (value === id ? '.on' : ''), { onclick: () => onpick(id) },
@@ -93,7 +95,17 @@ function renderAppearance() {
     preview,
     h('h3', {}, 'Новая вкладка (Ctrl+T)'),
     newTabChoice(data.settings.newTabStyle, (v) => { setSetting('newTabStyle', v); render(); }),
-    h('p.hint', { style: 'margin: 8px 2px 0' }, 'Часы на странице новой вкладки настраиваются щелчком по ним: стиль, цвет, секунды.'),
+    h('h3', {}, 'Часы на новой вкладке'),
+    h('div.card', {},
+      h('div.row', {}, h('div.label', {}, 'Стиль', h('div.hint', {}, 'Ещё больше — щелчком по часам на новой вкладке')),
+        h('select', { onchange: (e) => setSetting('clock', { ...data.settings.clock, style: e.target.value }) },
+          CLOCK_STYLES.map(([v, l]) => h('option', { value: v, selected: data.settings.clock.style === v }, l)))),
+      h('div.row', {}, h('div.label', {}, 'Цвет'),
+        h('select', { onchange: (e) => setSetting('clock', { ...data.settings.clock, color: e.target.value }) },
+          [['white', 'Белый'], ['accent', 'Цвет темы'], ['gradient', 'Градиент']].map(([v, l]) => h('option', { value: v, selected: data.settings.clock.color === v }, l)))),
+      toggleRow('Секунды', null, data.settings.clock.seconds, (v) => setSetting('clock', { ...data.settings.clock, seconds: v })),
+      toggleRow('12-часовой формат', null, data.settings.clock.h12, (v) => setSetting('clock', { ...data.settings.clock, h12: v })),
+      toggleRow('Приветствие и дата', null, data.settings.clock.date, (v) => setSetting('clock', { ...data.settings.clock, date: v }))),
     h('h3', {}, 'Готовые градиенты'),
     presets,
     h('h3', {}, 'Свои цвета (до четырёх)'),
@@ -331,6 +343,29 @@ function renderDownloads() {
 
 // ---------- Chromium ----------
 
+// Обновления с GitHub: статус, «проверить», «перезапустить и обновить»
+let update = null;
+panel.onUpdate((u) => { update = u; if (section === 'system') render(); });
+
+function renderUpdates(s) {
+  const u = update || { status: 'idle', current: data.versions.app };
+  const text = {
+    idle: `Essential ${u.current}`,
+    checking: 'Проверяем…',
+    downloading: `Скачиваем Essential ${u.version}… ${u.progress || 0}%`,
+    ready: `Essential ${u.version} скачан — установится при перезапуске`,
+    latest: `Essential ${u.current} — последняя версия`,
+    available: `Вышел Essential ${u.version}. Portable-версия обновляется вручную`,
+    error: `Не удалось проверить: ${u.error || 'нет связи с GitHub'}`,
+  }[u.status] || `Essential ${u.current}`;
+  const action = u.status === 'ready' ? h('button.btn.primary', { onclick: () => panel.installUpdate() }, 'Перезапустить и обновить')
+    : u.status === 'available' ? h('button.btn.primary', { onclick: () => panel.installUpdate() }, 'Скачать')
+      : h('button.btn', { disabled: u.status === 'checking' || u.status === 'downloading', onclick: () => panel.checkUpdate() }, 'Проверить');
+  return h('div.card', {},
+    h('div.row', {}, h('div.label', {}, 'Версия', h('div.hint', {}, text)), action),
+    toggleRow('Обновлять автоматически', 'Новая версия скачивается в фоне и ставится при перезапуске. Вкладки и настройки сохраняются', s.autoUpdate, (v) => setSetting('autoUpdate', v)));
+}
+
 // Как chrome://settings/fonts и /languages: шрифты, размеры, масштаб страниц и язык сайтов
 const ZOOMS = [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200];
 const LANGS = [
@@ -392,6 +427,8 @@ function renderSystem() {
       toggleRow('Проверка орфографии', 'Русский и английский', s.spellcheck, (v) => setSetting('spellcheck', v)),
       toggleRow('Восстанавливать вкладки при запуске', null, s.restoreSession, (v) => setSetting('restoreSession', v))),
     ...renderFonts(s),
+    h('h3', {}, 'Обновления'),
+    renderUpdates(s),
     h('h3', {}, 'Windows'),
     h('div.card', {},
       h('div.row', {},
@@ -555,6 +592,7 @@ function close() {
 
 panel.onOpen(async (s) => {
   data = await panel.get();
+  update = await panel.updateState();
   document.documentElement.style.setProperty('--ws', data.workspace.theme.colors[0]);
   document.getElementById('version').textContent = `Essential ${data.versions.app}\nChromium ${data.versions.chromium}`;
   section = SECTIONS[s] ? s : 'appearance';

@@ -4,6 +4,7 @@ const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { execFileSync } = require('child_process');
 const importer = require('./importer');
+const updater = require('./updater');
 const ext = require('./extensions');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
@@ -63,6 +64,7 @@ const DEFAULT_SETTINGS = {
   fontMono: '',
   defaultZoom: 100,
   languages: 'ru-RU,ru,en-US,en', // Accept-Language: на каком языке сайты показывают себя
+  autoUpdate: true, // сам проверяет и качает новые версии с GitHub, ставит при перезапуске
   httpsWarning: true, // предупреждать перед сайтами без HTTPS
   httpAllowed: [], // сайты без HTTPS, на которые сказали «всё равно перейти»
   // часы на новой вкладке (см. CLOCK_OPTIONS)
@@ -971,6 +973,18 @@ function setSetting(key, value) {
   if (key === 'searchEngine') refreshNewtab(activeWc());
   if (key === 'doNotTrack') applyDoNotTrack();
   if (key === 'languages') applyLanguages();
+  if (key === 'clock') {
+    // только известные стили и цвета; открытые новые вкладки перерисовывают часы сразу
+    const c = { ...DEFAULT_SETTINGS.clock };
+    for (const k of Object.keys(c)) {
+      const v = value?.[k];
+      if (typeof c[k] === 'boolean') c[k] = typeof v === 'boolean' ? v : c[k];
+      else if (CLOCK_OPTIONS[k].includes(v)) c[k] = v;
+    }
+    settings.clock = c;
+    saveSettings();
+    for (const t of tabs.values()) if (t.view) refreshNewtab(t.view.webContents);
+  }
 }
 
 // Accept-Language для сайтов — как «Языки» в chrome://settings
@@ -2026,7 +2040,26 @@ app.whenReady().then(() => {
     session.defaultSession.cookies.flushStore().finally(() => win.destroy());
   });
   win.loadFile('index.html');
+
+  updater.setup({
+    onState: (s) => {
+      if (win && !win.isDestroyed()) win.webContents.send('update', s);
+      overlays.panel?.webContents.send('update', s);
+    },
+    enabled: () => settings.autoUpdate,
+  });
 });
+
+// ---------- обновления ----------
+
+handle('update:state', () => updater.getState());
+on('update:check', () => updater.check());
+// перед установкой — как при обычном закрытии: сохранить вкладки и дождаться записи cookies
+on('update:install', () => updater.install(async () => {
+  flushed = true;
+  saveSession();
+  await session.defaultSession.cookies.flushStore().catch(() => {});
+}));
 
 app.on('second-instance', (_e, argv) => {
   if (!win) return;

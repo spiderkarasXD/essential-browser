@@ -61,8 +61,16 @@
     .s-outline .time { font-weight: 800; font-size: 104px; letter-spacing: -.03em; color: transparent !important; -webkit-text-stroke: 2px var(--clock-ink, var(--text)); }
     .s-mono .time { font: 300 80px/1 "Cascadia Mono", Consolas, monospace; letter-spacing: -.02em; }
     .s-hidden .time { display: none; }
-    .s-hidden .clock { padding: 0; }
-    .s-hidden .clock:hover::after { bottom: -20px; }
+    /* часы скрыты — на их месте едва заметная кнопка, чтобы их можно было вернуть */
+    .clock-back {
+      display: none; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 16px;
+      font: 13px inherit; font-family: inherit; color: var(--muted); opacity: .45;
+      transition: opacity .2s ease, color .2s ease;
+    }
+    .clock-back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+    .s-hidden .clock-back { display: flex; }
+    .s-hidden .clock:hover .clock-back { opacity: 1; color: var(--text); }
+    .s-hidden .clock:hover::after { content: none; }
     .c-accent .time { color: var(--accent, #2f7bff); --clock-ink: var(--accent, #2f7bff); }
     .c-gradient .time { background: linear-gradient(135deg, var(--c1, #2f7bff), var(--c2, #16c2ff), var(--c3, var(--c2, #16c2ff))); -webkit-background-clip: text; background-clip: text; color: transparent; --clock-ink: var(--c1, #2f7bff); }
     .c-gradient.s-outline .time { background: none; }
@@ -269,7 +277,8 @@
   <div id="bg"></div>
   <div id="grain"></div>
 
-  <div class="clock rise" id="clock" title="Настроить часы"><div class="time" id="time"></div></div>
+  <div class="clock rise" id="clock" title="Настроить часы"><div class="time" id="time"></div>
+    <div class="clock-back"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Вернуть часы</div></div>
   <div class="greet rise" id="greet" style="animation-delay: .06s"></div>
   <div id="clock-pop">
     <h3>Часы</h3>

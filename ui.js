@@ -422,8 +422,24 @@ browser.onDownloads((s) => {
 });
 browser.onOpenDownloads(openDownloads);
 
+// ---------- обновление ----------
+// скачанное обновление — кнопка «Обновить»; у portable-версии — «Новая версия» со ссылкой на скачивание
+function showUpdate(s) {
+  const b = $('#upd-btn');
+  const show = s.status === 'ready' || s.status === 'available';
+  b.hidden = !show;
+  if (!show) return;
+  b.querySelector('span').textContent = s.status === 'ready' ? 'Обновить' : 'Новая версия';
+  b.title = s.status === 'ready'
+    ? `Essential ${s.version} скачан — перезапустить и обновить. Вкладки сохранятся`
+    : `Вышел Essential ${s.version} — открыть страницу загрузки`;
+}
+browser.onUpdate(showUpdate);
+browser.updateState().then(showUpdate);
+
 // кнопки с data-act есть и в верхней панели, и в сайдбаре
 const ACTIONS = {
+  update: () => browser.installUpdate(),
   downloads: () => openDownloads(),
   back: () => browser.back(),
   forward: () => browser.forward(),
