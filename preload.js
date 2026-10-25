@@ -112,6 +112,18 @@ contextBridge.exposeInMainWorld('system', {
   setAutostart: send('system:autostart'),
 });
 
+// Оповещения о беспилотной опасности: настройка (onboarding.html, panel.html) и карточка тревоги (alert.html)
+contextBridge.exposeInMainWorld('alerts', {
+  info: invoke('alerts:info'),
+  regions: invoke('alerts:regions'),
+  set: send('alerts:set'),
+  test: send('alerts:test'),
+  onState: (cb) => ipcRenderer.on('alerts:state', (_e, s) => cb(s)),
+  onShow: (cb) => ipcRenderer.on('alert:show', (_e, data) => cb(data)),
+  onHide: (cb) => ipcRenderer.on('alert:hide', () => cb()),
+  close: send('alert:close'),
+});
+
 // Настройки, темы и импорт (panel.html)
 contextBridge.exposeInMainWorld('panel', {
   onOpen: (cb) => ipcRenderer.on('panel:open', (_e, section) => cb(section)),

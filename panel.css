@@ -493,3 +493,10 @@ kbd {
   margin-right: 8px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* тревога */
+.why-card { padding: 4px 16px; }
+.why-row { padding: 10px 0; }
+.why-row + .why-row { border-top: 1px solid var(--line); }
+.why-row b { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.why-row span { font-size: 13px; line-height: 1.45; }

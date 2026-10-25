@@ -325,6 +325,73 @@ function renderDevices() {
   ];
 }
 
+// ---------- Тревога (оповещения о беспилотной опасности) ----------
+
+let alertInfo = null;
+let alertRegions = null; // { ok, regions } | { ok: false, error }
+alerts.onState((s) => { if (alertInfo) alertInfo.state = s; if (section === 'alerts') render(); });
+
+function alertStatus(a) {
+  const s = a.state;
+  const hhmm = (sec) => new Date(sec * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  if (!a.available) return ['Источник данных не подключён — оповещения не работают.', ''];
+  if (a.country !== 'ru') return ['Выключено.', ''];
+  if (!a.region) return ['Выберите область — тогда начнём следить.', ''];
+  switch (s.status) {
+    case 'danger': return [`⚠ В области «${a.regionName}» объявлена опасность.`, 'bad'];
+    case 'ok': return [`Слежу за областью «${a.regionName}». Данные от ${hhmm(s.updated)}. Сообщений об опасности нет — это не гарантия безопасности.`, 'ok'];
+    case 'stale': return ['Источник давно не обновлялся. Сейчас на сигнал полагаться нельзя.', 'warn'];
+    case 'error': return [`Нет данных от источника: ${s.error}. Сейчас на сигнал полагаться нельзя.`, 'warn'];
+    case 'checking': return ['Проверяем источник…', ''];
+    default: return ['Выключено.', ''];
+  }
+}
+
+function renderAlerts() {
+  const a = alertInfo;
+  if (!a) return [h('h2', {}, 'Тревога'), h('div.card', {}, h('div.row', {}, h('span.spinner'), 'Загружаем…'))];
+  const [text, tone] = alertStatus(a);
+  const save = (patch) => { Object.assign(a, patch); alerts.set(patch); render(); };
+
+  const pickers = [];
+  if (a.available && a.country === 'ru') {
+    if (!alertRegions) {
+      alerts.regions().then((r) => { alertRegions = r; if (section === 'alerts') render(); });
+      pickers.push(h('div.card', {}, h('div.row', {}, h('span.spinner'), 'Загружаем список областей…')));
+    } else if (!alertRegions.ok) {
+      pickers.push(h('div.card', {}, h('div.row', {}, h('div.label', {}, 'Не удалось загрузить список областей', h('div.hint.err', {}, alertRegions.error)),
+        h('button.btn', { onclick: () => { alertRegions = null; render(); } }, 'Повторить'))));
+    } else {
+      pickers.push(h('h3', {}, 'Ваша область или край'), h('div.card', { style: 'padding: 12px' }, regionPicker(alertRegions.regions, a.region, (r) => {
+        a.region = r.id; a.regionName = r.name;
+        alerts.set({ region: r.id, regionName: r.name });
+        render();
+      })));
+    }
+  }
+
+  return [
+    h('h2', {}, 'Тревога'),
+    h('p.lead', {}, 'Сигнал и сообщение, если в вашей области объявлена беспилотная опасность.'),
+    h('div.card.why-card', {}, ALERTS_WHY.map(([title, body]) => h('div.why-row', {}, h('b', {}, title), h('span', {}, body)))),
+    h('div.card', {},
+      h('div.row', {}, h('div.label', {}, 'Статус', h('div.hint' + (tone === 'bad' || tone === 'warn' ? '.err' : ''), {}, text))),
+      h('div.row', {}, h('div.label', {}, 'Вы находитесь в России?'),
+        h('div.seg', {},
+          h('button' + (a.country === 'ru' ? '.on' : ''), { onclick: () => save({ country: 'ru' }) }, 'Да'),
+          h('button' + (a.country === 'other' ? '.on' : ''), { onclick: () => save(a.country === 'other' ? {} : { country: 'other', region: '', regionName: '' }) }, 'Нет'))),
+      toggleRow('Звуковой сигнал', 'Короткая сирена вместе с сообщением', a.sound, (v) => { a.sound = v; alerts.set({ sound: v }); }),
+      h('div.row', {}, h('div.label', {}, 'Проверить сигнал', h('div.hint', {}, 'Покажет сообщение и сыграет сирену — это только проверка')),
+        h('button.btn', { onclick: () => alerts.test() }, 'Проверить'))),
+    ...pickers,
+    h('h3', {}, 'Источник данных'),
+    h('div.card', {},
+      h('div.row', {}, h('div.label', {}, 'Адрес источника', h('div.hint', {}, 'JSON со списком областей и их статусом (https). Пусто — источник по умолчанию')),
+        h('input', { type: 'text', value: a.source, placeholder: 'https://…', style: 'width: 260px',
+          onchange: (e) => { const v = e.target.value.trim(); alertRegions = null; save({ source: v }); } }))),
+  ];
+}
+
 // ---------- Загрузки ----------
 
 function renderDownloads() {
@@ -555,7 +622,7 @@ function renderKeys() {
 
 // ---------- каркас ----------
 
-const SECTIONS = { appearance: renderAppearance, search: renderSearch, privacy: renderPrivacy, devices: renderDevices, downloads: renderDownloads, system: renderSystem, import: renderImport, keys: renderKeys };
+const SECTIONS = { appearance: renderAppearance, search: renderSearch, privacy: renderPrivacy, devices: renderDevices, alerts: renderAlerts, downloads: renderDownloads, system: renderSystem, import: renderImport, keys: renderKeys };
 
 function movePill() {
   const active = document.querySelector(`nav button[data-section="${section}"]`);
@@ -593,6 +660,10 @@ function close() {
 panel.onOpen(async (s) => {
   data = await panel.get();
   update = await panel.updateState();
+  alertInfo = await alerts.info();
+  alertRegions = null;
+  // раздел «Тревога» виден, только когда подключён источник данных; по адресу essential://settings/alerts открывается всегда
+  document.querySelector('nav button[data-section="alerts"]').hidden = !alertInfo.available && s !== 'alerts';
   document.documentElement.style.setProperty('--ws', data.workspace.theme.colors[0]);
   document.getElementById('version').textContent = `Essential ${data.versions.app}\nChromium ${data.versions.chromium}`;
   section = SECTIONS[s] ? s : 'appearance';

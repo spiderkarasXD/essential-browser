@@ -49,7 +49,8 @@ const SVG = {
   globe: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></svg>',
   power: '<svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>',
 };
-const eyebrow = (n) => h('div.eyebrow', {}, `Шаг ${n} из 5`);
+// номер шага и их число считаются сами: шаг про оповещения появляется только когда подключён источник данных
+const eyebrow = () => h('div.eyebrow', {}, `Шаг ${step} из ${STEPS.length - 2}`);
 
 function setAurora(colors) {
   const [c1, c2, c3] = colors;
@@ -83,7 +84,7 @@ function importStep() {
       list.replaceChildren(h('div.option', {}, h('div.text', {}, h('div.name', {}, 'Других браузеров не нашли'), h('div.meta', {}, 'Ничего страшного — начнём с чистого листа.'))));
       next.textContent = 'Дальше';
       next.disabled = false;
-      next.onclick = () => go(2);
+      next.onclick = () => go(step + 1);
       return;
     }
     for (const b of importList) if (!b.error && (b.history || b.bookmarks)) selected.add(b.id);
@@ -109,7 +110,8 @@ function importStep() {
       const a = r.added;
       next.textContent = 'Готово ✓';
       note.textContent = `Перенесено: ${a.history} страниц, ${a.bookmarks} закладок, ${a.searches} запросов.`;
-      setTimeout(() => go(2), 1100);
+      const at = step;
+      setTimeout(() => { if (step === at) go(at + 1); }, 1100); // если успели нажать «Пропустить» — второй раз не листаем
     };
   };
 
@@ -125,7 +127,7 @@ function importStep() {
     h('p.sub', {}, 'История, закладки и поисковые запросы. Пароли останутся там, где были.'),
     list,
     note,
-    h('div.actions', {}, h('button.link', { onclick: () => go(2) }, 'Пропустить'), next),
+    h('div.actions', {}, h('button.link', { onclick: () => go(step + 1) }, 'Пропустить'), next),
   ];
 }
 
@@ -144,7 +146,7 @@ function searchStep() {
     h('h1', {}, 'Где будем искать?'),
     h('p.sub', {}, 'Поисковик для адресной строки. Поменять можно в любой момент в настройках.'),
     grid,
-    h('div.actions', {}, h('button.link', { onclick: () => go(1) }, 'Назад'), h('button.btn.primary', { onclick: () => go(3) }, 'Дальше')),
+    h('div.actions', {}, h('button.link', { onclick: () => go(step - 1) }, 'Назад'), h('button.btn.primary', { onclick: () => go(step + 1) }, 'Дальше')),
   ];
 }
 
@@ -175,7 +177,7 @@ function themeStep() {
     h('p.sub', {}, 'Цвет пространства. Потом можно собрать свой градиент из четырёх цветов.'),
     preview,
     h('div', { style: 'width: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px' }, swatches, seg),
-    h('div.actions', {}, h('button.link', { onclick: () => go(2) }, 'Назад'), h('button.btn.primary', { onclick: () => go(4) }, 'Дальше')),
+    h('div.actions', {}, h('button.link', { onclick: () => go(step - 1) }, 'Назад'), h('button.btn.primary', { onclick: () => go(step + 1) }, 'Дальше')),
   ];
 }
 
@@ -196,7 +198,71 @@ function newTabStep() {
     h('h1', {}, 'Как открывать новую вкладку?'),
     h('p.sub', {}, 'Что появится по Ctrl+T и кнопке «+». Поменять можно в настройках → Внешний вид.'),
     grid,
-    h('div.actions', {}, h('button.link', { onclick: () => go(3) }, 'Назад'), h('button.btn.primary', { onclick: () => go(5) }, 'Дальше')),
+    h('div.actions', {}, h('button.link', { onclick: () => go(step - 1) }, 'Назад'), h('button.btn.primary', { onclick: () => go(step + 1) }, 'Дальше')),
+  ];
+}
+
+// Оповещения о беспилотной опасности: «вы в России?» → область. Шаг есть, только если подключён источник данных
+function alertsStep() {
+  const a = info.alerts;
+  const question = h('div', { style: 'width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px' });
+  const regionBox = h('div', { style: 'width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px' });
+  const next = h('button.btn.primary', { onclick: () => go(step + 1) }, 'Дальше');
+  let regions = null;
+
+  const sync = () => { next.textContent = a.country === 'ru' && !a.region ? 'Пропустить' : 'Дальше'; };
+
+  const drawRegions = async () => {
+    if (a.country !== 'ru') return regionBox.replaceChildren();
+    regionBox.replaceChildren(h('div.note', {}, h('span.spinner'), ' Загружаем список областей…'));
+    if (!regions) {
+      const r = await alerts.regions();
+      if (a.country !== 'ru') return regionBox.replaceChildren(); // за это время ответили «Нет»
+      if (!r.ok) {
+        return regionBox.replaceChildren(
+          h('div.note', {}, `Не удалось загрузить список областей: ${r.error}. Выбрать область можно позже в настройках → Тревога.`),
+          h('button.btn', { onclick: drawRegions }, 'Повторить'));
+      }
+      regions = r.regions;
+    }
+    regionBox.replaceChildren(
+      h('div.q', {}, 'В какой вы области или крае?'),
+      regionPicker(regions, a.region, (r) => {
+        a.region = r.id;
+        alerts.set({ country: 'ru', region: r.id, regionName: r.name });
+        sync();
+      }));
+  };
+
+  const drawQuestion = () => {
+    const pick = (country) => {
+      if (a.country === country) return;
+      a.country = country;
+      // «Нет» — область не храним; «Да» — область выберем ниже
+      if (country !== 'ru') a.region = '';
+      alerts.set(country === 'ru' ? { country } : { country, region: '', regionName: '' });
+      drawQuestion();
+      drawRegions();
+      sync();
+    };
+    const opt = (id, title, meta) => h('button.option' + (a.country === id ? '.on' : ''), { onclick: () => pick(id) },
+      h('div.text', {}, h('div.name', {}, title), h('div.meta', {}, meta)), tick());
+    question.replaceChildren(
+      h('div.q', {}, 'Вы находитесь в России?'),
+      h('div.list', { style: 'margin: 0; width: 100%' }, opt('ru', 'Да', 'Спросим область и будем следить за ней'), opt('other', 'Нет', 'Оповещения не нужны, ничего не сохраняем')));
+  };
+  drawQuestion();
+  drawRegions();
+  sync();
+
+  return [
+    eyebrow(),
+    h('h1', {}, 'Оповещения о беспилотной опасности'),
+    h('p.sub', {}, 'Если в вашей области объявят опасность БПЛА, Essential включит сигнал и подскажет, что делать.'),
+    h('div.why', {}, ALERTS_WHY.map(([title, text]) => h('div', {}, h('b', {}, title), h('span', {}, text)))),
+    question,
+    regionBox,
+    h('div.actions', {}, h('button.link', { onclick: () => go(step - 1) }, 'Назад'), next),
   ];
 }
 
@@ -229,7 +295,7 @@ function systemStep() {
     h('p.sub', {}, 'Можно пропустить — оба пункта есть в настройках.'),
     h('div.list', {}, def, auto),
     note,
-    h('div.actions', {}, h('button.link', { onclick: () => go(4) }, 'Назад'), h('button.btn.primary', { onclick: () => go(6) }, 'Дальше')),
+    h('div.actions', {}, h('button.link', { onclick: () => go(step - 1) }, 'Назад'), h('button.btn.primary', { onclick: () => go(step + 1) }, 'Дальше')),
   ];
 }
 
@@ -268,7 +334,7 @@ function finish() {
 
 // ---------- переходы ----------
 
-const STEPS = [intro, importStep, searchStep, themeStep, newTabStep, systemStep, doneStep];
+let STEPS = [intro, importStep, searchStep, themeStep, newTabStep, systemStep, doneStep];
 
 function go(n) {
   const back = n < step;
@@ -281,9 +347,11 @@ function go(n) {
   }
   step = n;
   current = h('section.step.enter' + (back ? '.back' : ''), {}, ...STEPS[n]());
+  // длинный шаг (оповещения) прокручивается внутри окна, а не уезжает под нижнюю границу
+  current.classList.toggle('tall', STEPS[n] === alertsStep);
   stage.append(current);
   document.body.classList.toggle('intro', n === 0);
-  dotsEl.replaceChildren(...[1, 2, 3, 4, 5, 6].map((i) => h('i' + (i === n ? '.on' : ''))));
+  dotsEl.replaceChildren(...STEPS.slice(1).map((_, k) => h('i' + (k + 1 === n ? '.on' : ''))));
 }
 
 document.addEventListener('keydown', (e) => {
@@ -292,6 +360,8 @@ document.addEventListener('keydown', (e) => {
 
 system.onOnboarding(async () => {
   info = await system.info();
+  // шаг про оповещения — только если подключён источник данных: иначе спрашивать нечего
+  STEPS = [intro, importStep, searchStep, themeStep, newTabStep, ...(info.alerts.available ? [alertsStep] : []), systemStep, doneStep];
   theme = JSON.parse(JSON.stringify(info.workspace.theme));
   setAurora(theme.colors);
   document.body.classList.remove('out');

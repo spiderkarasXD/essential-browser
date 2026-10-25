@@ -1,0 +1,29 @@
+/* выбор области и пояснение «зачем это нужно» — общие для первого запуска и настроек */
+.why {
+  width: 100%;
+  margin: 10px 0 14px;
+  padding: 4px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09);
+  text-align: left;
+}
+.why > div { padding: 10px 0; }
+.why > div + div { border-top: 1px solid rgba(255, 255, 255, .08); }
+.why b { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: rgba(255, 255, 255, .55); }
+.why span { font-size: 13px; line-height: 1.45; color: rgba(255, 255, 255, .82); }
+
+.rp { width: 100%; text-align: left; }
+.rp-search {
+  width: 100%; height: 38px; padding: 0 12px; border: 0; outline: none; border-radius: 11px; color: inherit; font: inherit;
+  background: rgba(255, 255, 255, .08); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.rp-search:focus { box-shadow: inset 0 0 0 2px var(--ws, var(--c1, #2f7bff)); }
+.rp-list { margin-top: 8px; max-height: 190px; overflow-y: auto; border-radius: 12px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .2) transparent; }
+.rp-item {
+  display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 9px; text-align: left; color: inherit; font: inherit;
+  background: none; cursor: pointer; transition: background .12s ease;
+}
+.rp-item:hover { background: rgba(255, 255, 255, .08); }
+.rp-item.on { background: color-mix(in srgb, var(--ws, var(--c1, #2f7bff)) 38%, transparent); font-weight: 600; }
+.rp-empty { padding: 16px; text-align: center; opacity: .55; }

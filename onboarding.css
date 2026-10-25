@@ -341,3 +341,15 @@ body.intro #dots { opacity: 0; }
   transition: width .45s var(--spring), background .3s ease;
 }
 #dots i.on { width: 26px; background: #f2f1f7; }
+
+/* оповещения: вопросы шага */
+.q { align-self: flex-start; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, .85); }
+.step .why { max-width: 560px; }
+.step.tall { align-self: start; margin-top: 4px; gap: 10px; max-height: calc(100vh - 84px); overflow-y: auto; padding: 4px 8px 28px; scrollbar-width: none; }
+.step.tall::-webkit-scrollbar { display: none; }
+.step.tall h1 { font-size: 30px; }
+.step.tall .sub { font-size: 13px; }
+.step.tall .why { margin: 4px 0 8px; padding: 2px 14px; }
+.step.tall .why > div { padding: 7px 0; }
+.step.tall .why span { font-size: 12.5px; }
+.step.tall .actions { margin-top: 8px; }

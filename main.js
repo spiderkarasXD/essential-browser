@@ -1,10 +1,11 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, clipboard, dialog, session, shell } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, clipboard, dialog, session, shell, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
 const { execFileSync } = require('child_process');
 const importer = require('./importer');
 const updater = require('./updater');
+const alerts = require('./alerts');
 const ext = require('./extensions');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
@@ -65,6 +66,12 @@ const DEFAULT_SETTINGS = {
   defaultZoom: 100,
   languages: 'ru-RU,ru,en-US,en', // Accept-Language: на каком языке сайты показывают себя
   autoUpdate: true, // сам проверяет и качает новые версии с GitHub, ставит при перезапуске
+  // оповещения о беспилотной опасности (alerts.js). Страна и область хранятся только здесь, на этом компьютере
+  alertsCountry: '', // '' — ещё не спрашивали, ru — в России, other — нет
+  alertsRegion: '',
+  alertsRegionName: '',
+  alertsSound: true,
+  alertsSource: '', // свой адрес источника; пусто — alerts.DEFAULT_SOURCE
   httpsWarning: true, // предупреждать перед сайтами без HTTPS
   httpAllowed: [], // сайты без HTTPS, на которые сказали «всё равно перейти»
   // часы на новой вкладке (см. CLOCK_OPTIONS)
@@ -153,6 +160,7 @@ let win;
 let shownView = null;
 const overlays = {}; // name -> WebContentsView (spotlight, panel)
 const openOverlays = new Set();
+let alertOpen = false; // карточка тревоги поверх окна (не входит в openOverlays: не должна забирать фокус у страницы)
 const tabs = new Map(); // id -> { id, wsId, view, url, title, favicon }
 let workspaces = []; // { id, name, icon, color, theme, tabIds, activeTab }
 let activeWs = null;
@@ -428,6 +436,11 @@ function layout() {
   for (const [name, view] of Object.entries(overlays)) {
     // панель поиска — маленькая, в правом верхнем углу страницы, чтобы не перекрывать сайт
     if (name === 'find') view.setBounds({ x: width - 380, y: (win.isFullScreen() ? GAP : TOOLBAR_H) + 6, width: 372, height: 64 });
+    // тревога — карточка сверху по центру: не закрывает страницу целиком и не отбирает щелчки у остального окна
+    else if (name === 'alert') {
+      const w = Math.min(600, width - 24);
+      view.setBounds({ x: Math.round((width - w) / 2), y: (win.isFullScreen() ? GAP : TOOLBAR_H) + 8, width: w, height: 230 });
+    }
     else view.setBounds({ x: 0, y: 0, width, height });
   }
 }
@@ -590,6 +603,7 @@ function createTab(url = NEWTAB_URL, { activate = true, wsId = activeWs, restore
 
 function raiseOverlays() {
   for (const name of openOverlays) win.contentView.addChildView(overlays[name]);
+  if (alertOpen) win.contentView.addChildView(overlays.alert); // тревога всегда поверх всего
 }
 
 function showActive() {
@@ -838,6 +852,51 @@ function hideOverlay(name, delay = 0) {
   setTimeout(() => {
     if (!openOverlays.has(name)) win.contentView.removeChildView(overlays[name]);
   }, delay);
+}
+
+// ---------- тревога ----------
+
+// kind: danger — опасность в области (сирена), clear — опасность снята, lost — мониторинг не работает, test — проверка сигнала
+function showAlert(kind) {
+  if (!win || win.isDestroyed()) return;
+  const view = overlay('alert', 'alert.html');
+  alertOpen = true;
+  win.contentView.addChildView(view);
+  layout();
+  const payload = { kind, region: settings.alertsRegionName || '', sound: settings.alertsSound };
+  const send = () => view.webContents.send('alert:show', payload);
+  if (view.webContents.isLoading()) view.webContents.once('did-finish-load', send);
+  else send();
+}
+
+function hideAlert() {
+  if (!alertOpen) return;
+  alertOpen = false;
+  overlays.alert?.webContents.send('alert:hide');
+  setTimeout(() => {
+    if (!alertOpen && overlays.alert && win && !win.isDestroyed()) win.contentView.removeChildView(overlays.alert);
+  }, 350);
+}
+
+function onAlertsChange(state, event) {
+  if (win && !win.isDestroyed()) win.webContents.send('alerts:state', state);
+  overlays.panel?.webContents.send('alerts:state', state);
+  if (!event) return;
+  if (event === 'danger-start') {
+    showAlert('danger');
+    // системное уведомление и мигание кнопки на панели задач — на случай, если окно свёрнуто
+    new Notification({
+      title: 'Опасность в вашей области',
+      body: `${settings.alertsRegionName || 'Ваша область'}: угроза БПЛА. Отойдите от окон, пройдите в помещение без окон или в укрытие.`,
+      urgency: 'critical',
+      silent: true,
+    }).show();
+    if (!win.isFocused()) { win.flashFrame(true); win.once('focus', () => win.flashFrame(false)); }
+  } else if (event === 'danger-end') {
+    showAlert('clear');
+  } else if (event === 'lost') {
+    showAlert('lost');
+  }
 }
 
 // mode: new — новая вкладка; current — адрес текущей; search — пустой поиск в текущей (Ctrl+K); history — недавнее (Ctrl+H)
@@ -1625,6 +1684,7 @@ handle('onboarding:info', () => ({
   presets: THEME_PRESETS,
   workspace: { theme: getWs().theme },
   system: { isDefault: isDefaultBrowser(), autostart: getAutostart() },
+  alerts: alertsInfo(),
 }));
 handle('system:makeDefault', registerAsBrowser);
 on('system:autostart', setAutostart);
@@ -2041,6 +2101,11 @@ app.whenReady().then(() => {
   });
   win.loadFile('index.html');
 
+  alerts.setup({
+    getConfig: () => ({ source: settings.alertsSource, country: settings.alertsCountry, region: settings.alertsRegion }),
+    onChange: onAlertsChange,
+  });
+
   updater.setup({
     onState: (s) => {
       if (win && !win.isDestroyed()) win.webContents.send('update', s);
@@ -2051,6 +2116,34 @@ app.whenReady().then(() => {
 });
 
 // ---------- обновления ----------
+
+// ---------- оповещения о беспилотной опасности ----------
+
+const alertsInfo = () => ({
+  available: alerts.available(), // подключён ли источник данных; без него оповещения не предлагаем
+  country: settings.alertsCountry,
+  region: settings.alertsRegion,
+  regionName: settings.alertsRegionName,
+  sound: settings.alertsSound,
+  source: settings.alertsSource,
+  state: alerts.getState(),
+});
+
+handle('alerts:info', alertsInfo);
+handle('alerts:regions', () => alerts.regions());
+on('alerts:set', (patch = {}) => {
+  const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : null);
+  if (['', 'ru', 'other'].includes(patch.country)) settings.alertsCountry = patch.country;
+  if (str(patch.region, 64) !== null) settings.alertsRegion = str(patch.region, 64);
+  if (str(patch.regionName, 120) !== null) settings.alertsRegionName = str(patch.regionName, 120);
+  if (typeof patch.sound === 'boolean') settings.alertsSound = patch.sound;
+  if (typeof patch.source === 'string' && (patch.source === '' || alerts.validSource(patch.source))) settings.alertsSource = patch.source.slice(0, 500);
+  if (settings.alertsCountry !== 'ru') { settings.alertsRegion = ''; settings.alertsRegionName = ''; } // не в России — область не храним
+  saveSettings();
+  alerts.restart();
+});
+on('alerts:test', () => showAlert('test'));
+on('alert:close', hideAlert);
 
 handle('update:state', () => updater.getState());
 on('update:check', () => updater.check());
