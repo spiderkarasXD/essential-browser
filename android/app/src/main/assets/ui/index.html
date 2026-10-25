@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data:; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>Essential</title>
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="regions.css">
+</head>
+<body>
+  <!-- нижняя панель: назад, адрес, загрузки, вкладки, меню -->
+  <div id="bar">
+    <div class="row main">
+      <button class="ib" id="b-back" aria-label="Назад"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button id="addr">
+        <span class="lock"></span>
+        <span class="text"></span>
+        <i class="prog"></i>
+      </button>
+      <button class="ib dl" id="b-dl" hidden aria-label="Загрузки">
+        <svg class="ring" viewBox="0 0 24 24"><circle class="track" cx="12" cy="12" r="9.5"/><circle class="bar" cx="12" cy="12" r="9.5" pathLength="100"/></svg>
+        <svg class="glyph" viewBox="0 0 24 24"><path d="M12 7v9M8 12.5l4 4 4-4"/></svg>
+      </button>
+      <button class="ib" id="b-tabs" aria-label="Вкладки"><span class="count">1</span></button>
+      <button class="ib" id="b-menu" aria-label="Меню"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><i class="dot" hidden></i></button>
+    </div>
+    <!-- поиск на странице -->
+    <div class="row find" hidden>
+      <input id="find-q" placeholder="Найти на странице" autocomplete="off" spellcheck="false">
+      <span id="find-n"></span>
+      <button class="ib" id="find-up" aria-label="Предыдущее"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+      <button class="ib" id="find-down" aria-label="Следующее"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button class="ib" id="find-x" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+  </div>
+
+  <div id="layer">
+    <div id="backdrop"></div>
+  </div>
+
+  <script src="theme.js"></script>
+  <script src="favicon.js"></script>
+  <script src="regions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

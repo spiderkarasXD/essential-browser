@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Страница недоступна</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: grid; place-items: center; padding: 24px;
+      background: radial-gradient(90% 60% at 50% 0%, rgba(47, 123, 255, .22), transparent 70%), #121218;
+      color: #ecebf2; font: 15px/1.5 Roboto, system-ui, sans-serif;
+    }
+    .card { width: min(520px, 100%); animation: rise .5s cubic-bezier(.22, 1, .36, 1) both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+    .icon { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: rgba(255, 255, 255, .07); }
+    .icon svg { width: 30px; height: 30px; fill: none; stroke: #ecebf2; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { margin: 20px 0 8px; font-size: 24px; }
+    p { margin: 0 0 8px; color: rgba(236, 235, 242, .65); }
+    .host { color: #ecebf2; font-weight: 600; word-break: break-all; }
+    code { font: 12px monospace; color: rgba(236, 235, 242, .5); }
+    button { margin-top: 22px; font: inherit; font-weight: 600; border: 0; padding: 12px 22px; border-radius: 24px; background: #2f7bff; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon"><svg viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.6a10 10 0 0 1 14 0M8.5 16.2a5 5 0 0 1 7 0"/><path d="M3 3l18 18"/></svg></div>
+    <h1 id="t">Страница недоступна</h1>
+    <p id="d"></p>
+    <code id="c"></code>
+    <div><button id="r">Обновить</button></div>
+  </div>
+  <script>
+    const q = new URLSearchParams(location.search);
+    const url = q.get('url') || '';
+    const code = q.get('code') || '';
+    let host = url;
+    try { host = new URL(url).host; } catch {}
+    const b = document.createElement('span');
+    b.className = 'host';
+    b.textContent = host;
+    const offline = /INTERNET_DISCONNECTED|NETWORK_CHANGED/.test(code);
+    const dns = /NAME_NOT_RESOLVED/.test(code);
+    document.getElementById('t').textContent = offline ? 'Нет интернета' : dns ? 'Сайт не найден' : 'Страница недоступна';
+    document.getElementById('d').append(...(offline ? ['Проверьте Wi-Fi или мобильный интернет и обновите страницу.']
+      : dns ? ['Не удалось найти адрес ', b, '. Проверьте, нет ли опечатки.'] : ['Сайт ', b, ' не ответил. Возможно, он временно не работает.']));
+    document.getElementById('c').textContent = code;
+    document.title = (offline ? 'Нет интернета' : 'Недоступно') + ' — ' + host;
+    document.getElementById('r').onclick = () => { location.href = url; };
+  </script>
+</body>
+</html>
