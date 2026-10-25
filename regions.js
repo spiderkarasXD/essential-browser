@@ -13,7 +13,7 @@ function regionPicker(regions, value, onpick) {
   box.className = 'rp';
   const search = document.createElement('input');
   search.className = 'rp-search';
-  search.placeholder = 'Найти область или край';
+  search.placeholder = 'Область, край, республика или город';
   search.autocomplete = 'off';
   search.spellcheck = false;
   const list = document.createElement('div');
@@ -22,13 +22,16 @@ function regionPicker(regions, value, onpick) {
 
   const draw = () => {
     const q = search.value.trim().toLowerCase();
-    const shown = regions.filter((r) => !q || r.name.toLowerCase().includes(q));
+    // ищем и по названию, и по столице: «Барнаул» находит Алтайский край
+    const shown = regions.filter((r) => !q || r.name.toLowerCase().includes(q) || (r.capital || '').toLowerCase().includes(q));
     list.replaceChildren(...(shown.length ? shown : [Object.assign(document.createElement('div'), { className: 'rp-empty', textContent: 'Ничего не нашлось' })]).map((r) => {
       if (!r.id) return r;
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'rp-item' + (r.id === picked ? ' on' : '');
       b.textContent = r.name;
+      const meta = [r.kind, r.capital].filter((x) => x && !r.name.toLowerCase().includes(x)).join(' · ');
+      if (meta) b.append(Object.assign(document.createElement('span'), { className: 'rp-kind', textContent: meta }));
       b.onclick = () => { picked = r.id; draw(); onpick(r); };
       return b;
     }));

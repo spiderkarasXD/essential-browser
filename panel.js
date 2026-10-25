@@ -354,7 +354,7 @@ function renderAlerts() {
   const save = (patch) => { Object.assign(a, patch); alerts.set(patch); render(); };
 
   const pickers = [];
-  if (a.available && a.country === 'ru') {
+  if (a.country === 'ru') { // список встроенный — выбрать область можно и до подключения источника
     if (!alertRegions) {
       alerts.regions().then((r) => { alertRegions = r; if (section === 'alerts') render(); });
       pickers.push(h('div.card', {}, h('div.row', {}, h('span.spinner'), 'Загружаем список областей…')));

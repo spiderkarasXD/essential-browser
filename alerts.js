@@ -4,7 +4,8 @@
 //   { "updated": 1761400000,                      // когда источник последний раз обновлялся, секунды Unix
 //     "regions": [ { "id": "belgorod", "name": "Белгородская область", "drone": true, "since": 1761399000 } ] }
 // drone: true — в области сейчас объявлена беспилотная опасность. since — с какого момента (необязательно).
-// Список областей для выбора берётся из этого же ответа: браузер сам областей не придумывает.
+// Список для выбора — встроенный, из subjects-rf.json (89 субъектов). Область из ответа источника ищется
+// по id или по названию; лучше всего, если источник пишет названия так же, как в subjects-rf.json.
 //
 // Это не официальная система оповещения. «Нет опасности» здесь никогда не значит «безопасно»:
 // если источник молчит, устарел или недоступен, показываем это явно, а не «всё спокойно».
@@ -13,6 +14,28 @@ const { app, net } = require('electron');
 // Адрес источника по умолчанию. Пока пуст: оповещения не работают, пока источник не задан
 // (в настройках → «Тревога» или здесь). Своего адреса у проекта ещё нет, чужой закрытый адрес сюда не вписываем.
 const DEFAULT_SOURCE = '';
+
+// встроенный список субъектов: { id, name, kind, capital }; id — само название, чтобы совпадать с источником по имени
+const KINDS = {
+  kraja: 'край',
+  oblasti: 'область',
+  respubliki: 'республика',
+  goroda_federalnogo_znachenija: 'город федерального значения',
+  avtonomnaja_oblast: 'автономная область',
+  avtonomnye_okruga: 'автономный округ',
+};
+const SUBJECTS = Object.entries(require('./subjects-rf.json').categories)
+  .flatMap(([cat, list]) => list.map((x) => {
+    const name = typeof x === 'string' ? x : x.name;
+    return { id: name, name, kind: KINDS[cat] || '', capital: (typeof x === 'object' && x.capital) || '' };
+  }))
+  .sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+// «Республика Татарстан» = «Татарстан», «Кемеровская область — Кузбасс» = «Кемеровская область (Кузбасс)».
+// Только безопасные упрощения: регистр, ё, тире и скобки, слово «республика». Неуверенное совпадение хуже,
+// чем никакого: ненайденная область показывается как ошибка, а не как «спокойно».
+const norm = (s) => String(s).toLowerCase().replace(/ё/g, 'е').replace(/республика/g, ' ').replace(/[()—–\-.,«»"]/g, ' ').replace(/\s+/g, ' ').trim();
+const sameRegion = (feedRegion, mine) => feedRegion.id === mine || norm(feedRegion.name) === norm(mine);
 
 const POLL_MS = 60 * 1000;
 const STALE_MS = 10 * 60 * 1000; // данные старше — «источник не обновляется»
@@ -78,7 +101,7 @@ async function poll() {
   try {
     const feed = await fetchFeed(source());
     if (mine !== seq) return; // за это время настройки поменялись
-    const r = feed.regions.find((x) => x.id === cfg().region);
+    const r = feed.regions.find((x) => sameRegion(x, cfg().region));
     const now = Date.now();
     state.checkedAt = now;
     if (!r) return set({ status: 'error', error: 'выбранной области нет в списке источника' });
@@ -123,15 +146,9 @@ function restart() {
   poll().then(schedule);
 }
 
-// список областей для выбора — из того же источника
+// список для выбора — встроенный: не зависит от сети и от того, подключён ли источник
 async function regions() {
-  const src = source();
-  if (!validSource(src)) return { ok: false, error: 'Источник данных не подключён' };
-  try {
-    return { ok: true, regions: (await fetchFeed(src)).regions.map(({ id, name }) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ru')) };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
+  return { ok: true, regions: SUBJECTS };
 }
 
 function setup({ getConfig, onChange }) {

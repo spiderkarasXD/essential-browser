@@ -27,3 +27,5 @@
 .rp-item:hover { background: rgba(255, 255, 255, .08); }
 .rp-item.on { background: color-mix(in srgb, var(--ws, var(--c1, #2f7bff)) 38%, transparent); font-weight: 600; }
 .rp-empty { padding: 16px; text-align: center; opacity: .55; }
+.rp-item { display: flex; align-items: baseline; gap: 8px; }
+.rp-kind { margin-left: auto; font-size: 12px; font-weight: 400; opacity: .5; white-space: nowrap; }
