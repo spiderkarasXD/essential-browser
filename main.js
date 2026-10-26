@@ -1556,6 +1556,7 @@ function showPageMenu(wc, p) {
     items.push(
       { label: 'Открыть картинку в новой вкладке', click: () => createTab(p.srcURL, { activate: false }) },
       { label: 'Сохранить картинку как…', click: () => wc.downloadURL(p.srcURL) },
+      { label: 'Копировать картинку', click: () => wc.copyImageAt(p.x, p.y) },
       { label: 'Копировать адрес картинки', click: () => clipboard.writeText(p.srcURL) },
       { type: 'separator' },
     );

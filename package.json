@@ -1,7 +1,7 @@
 {
   "name": "essential-browser",
   "productName": "Essential",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "Essential — браузер на Chromium в стиле Zen и Arc",
   "author": "Essential",
   "license": "GPL-3.0",
@@ -42,7 +42,11 @@
       "artifactName": "Essential-Setup-${version}.${ext}"
     },
     "publish": [
-      { "provider": "github", "owner": "spiderkarasXD", "repo": "essential-browser" }
+      {
+        "provider": "github",
+        "owner": "spiderkarasXD",
+        "repo": "essential-browser"
+      }
     ],
     "portable": {
       "artifactName": "Essential-${version}-portable.exe"
