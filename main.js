@@ -6,6 +6,7 @@ const { execFileSync } = require('child_process');
 const importer = require('./importer');
 const updater = require('./updater');
 const alerts = require('./alerts');
+const userscripts = require('./userscripts');
 const ext = require('./extensions');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
@@ -1800,6 +1801,21 @@ function setupChromeExtensions() {
       if (bw !== win && !bw.isDestroyed()) bw.close();
     },
   });
+  setupUserScripts();
+}
+
+// chrome.userScripts (Tampermonkey и т.п., см. userscripts.js). Preload для сервис-воркера должен выполниться
+// раньше preload'а electron-chrome-extensions — тот в конце замораживает chrome, и добавить API уже нельзя.
+// Поэтому снимаем их preload'ы, ставим свой и возвращаем их обратно — порядок выполнения = порядок регистрации.
+function setupUserScripts() {
+  const ses = session.defaultSession;
+  userscripts.install({ session: ses, chromeExt });
+  const theirs = ses.getPreloadScripts().filter((p) => p.id === 'crx-mv2-preload' || p.id === 'crx-mv3-preload');
+  for (const p of theirs) ses.unregisterPreloadScript(p.id);
+  ses.registerPreloadScript({ type: 'service-worker', id: 'essential-userscripts-sw', filePath: path.join(__dirname, 'userscripts-sw-preload.js') });
+  for (const p of theirs) ses.registerPreloadScript({ type: p.type, id: p.id, filePath: p.filePath });
+  ses.registerPreloadScript({ type: 'service-worker', id: 'essential-userscripts-sw-restore', filePath: path.join(__dirname, 'userscripts-sw-restore.js') });
+  ses.registerPreloadScript({ type: 'frame', id: 'essential-userscripts', filePath: path.join(__dirname, 'userscripts-preload.js') });
 }
 
 async function setupWebStore() {
