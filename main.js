@@ -7,7 +7,6 @@ const importer = require('./importer');
 const updater = require('./updater');
 const alerts = require('./alerts');
 const userscripts = require('./userscripts');
-const extensionProxy = require('./extension-proxy');
 const ext = require('./extensions');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
@@ -1763,7 +1762,6 @@ function pinnedExtensions() {
 // Ей нужно знать наши вкладки: addTab при создании, selectTab при переключении, removeTab при закрытии.
 
 let chromeExt = null;
-let proxyExtensions = null;
 const STORE_DIR = () => path.join(app.getPath('userData'), 'WebStore'); // отдельно от перенесённых из Arc/Chrome
 const tabByWc = (wc) => [...tabs.values()].find((t) => t.view?.webContents === wc);
 
@@ -1804,7 +1802,6 @@ function setupChromeExtensions() {
       if (bw !== win && !bw.isDestroyed()) bw.close();
     },
   });
-  proxyExtensions = extensionProxy.install({ session: session.defaultSession, chromeExt, file: path.join(app.getPath('userData'), 'extension-proxy.json') });
   setupUserScripts();
 }
 
@@ -1816,7 +1813,6 @@ function setupUserScripts() {
   userscripts.install({ session: ses, chromeExt });
   const theirs = ses.getPreloadScripts().filter((p) => p.id === 'crx-mv2-preload' || p.id === 'crx-mv3-preload');
   for (const p of theirs) ses.unregisterPreloadScript(p.id);
-  for (const type of ['frame', 'service-worker']) ses.registerPreloadScript({ type, id: `essential-proxy-${type}`, filePath: path.join(__dirname, 'extension-proxy-preload.js') });
   ses.registerPreloadScript({ type: 'service-worker', id: 'essential-userscripts-sw', filePath: path.join(__dirname, 'userscripts-sw-preload.js') });
   for (const p of theirs) ses.registerPreloadScript({ type: p.type, id: p.id, filePath: p.filePath });
   ses.registerPreloadScript({ type: 'service-worker', id: 'essential-userscripts-sw-restore', filePath: path.join(__dirname, 'userscripts-sw-restore.js') });
@@ -2070,7 +2066,7 @@ handle('import:detect', async () => {
 });
 handle('import:run', runImport);
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   essentials = readJson('essentials.json', [
     { title: 'YouTube', url: 'https://www.youtube.com/' },
@@ -2086,6 +2082,9 @@ app.whenReady().then(async () => {
   sitePerms = readJson('site-permissions.json', {});
   setupSession();
   setupChromeExtensions(); // до загрузки расширений и до первой вкладки
+  ext.loadAll(session.defaultSession).then(extChanged);
+  setupWebStore().catch((e) => console.error('web store', e));
+
   win = new BrowserWindow({
     width: 1320,
     height: 840,
@@ -2117,12 +2116,6 @@ app.whenReady().then(async () => {
     saveSession();
     session.defaultSession.cookies.flushStore().finally(() => win.destroy());
   });
-  // Create the host window first: extension onInstalled handlers may open tabs.
-  // Load the UI (which restores website tabs) only after all extensions are ready.
-  await ext.loadAll(session.defaultSession);
-  await setupWebStore().catch((e) => console.error('web store', e));
-  await proxyExtensions.restore();
-  extChanged();
   win.loadFile('index.html');
 
   alerts.setup({
