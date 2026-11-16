@@ -622,7 +622,105 @@ function renderKeys() {
 
 // ---------- каркас ----------
 
-const SECTIONS = { appearance: renderAppearance, search: renderSearch, privacy: renderPrivacy, devices: renderDevices, alerts: renderAlerts, downloads: renderDownloads, system: renderSystem, import: renderImport, keys: renderKeys };
+let modDraft = null;
+let modError = '';
+let modBusy = false;
+let zenLink = '';
+
+async function changeMods(action, input, redraw = true) {
+  if (modBusy) return;
+  modBusy = true;
+  try {
+    const result = await panel.changeMods(action, input);
+    if (!result) throw new Error('No mod state');
+    data.mods = result;
+    modError = result.error || '';
+    if (action === 'save' && !modError) modDraft = null;
+    if (action === 'zen' && !modError) zenLink = '';
+  } catch {
+    modError = 'Не удалось применить изменения.';
+  } finally {
+    modBusy = false;
+    if (section === 'mods' && (redraw || modError)) render();
+  }
+}
+
+function renderMods() {
+  const { layout, options, items } = data.mods;
+  const controls = Object.entries(options).map(([key, spec]) => {
+    const change = (value) => changeMods('layout', { [key]: value }, false);
+    if (typeof spec.value === 'boolean') return toggleRow(spec.label, null, layout[key], change);
+    const control = spec.choices
+      ? h('select', { onchange: (e) => change(e.target.value), 'aria-label': spec.label },
+        Object.entries(spec.choices).map(([value, label]) => h('option', { value, selected: layout[key] === value }, label)))
+      : h('div.range-row.mod-range', {},
+        h('input', { type: 'range', min: spec.min, max: spec.max, step: spec.step, value: layout[key], 'aria-label': spec.label,
+          oninput: (e) => { e.target.nextElementSibling.textContent = e.target.value + ' px'; },
+          onchange: (e) => change(Number(e.target.value)) }),
+        h('span.val', {}, layout[key] + ' px'));
+    return h('div.row', {}, h('div.label', {}, spec.label), control);
+  });
+  const edit = (item) => {
+    modError = '';
+    modDraft = { ...item, zen: item.zen && { ...item.zen, values: { ...item.zen.values } } };
+    render();
+    content.querySelector('.mod-editor').querySelector('input, select').focus();
+    content.querySelector('.mod-editor').scrollIntoView({ block: 'nearest' });
+  };
+  const zenFields = modDraft?.zen?.fields.map((field) => {
+    const value = modDraft.zen.values[field.key];
+    const set = (next) => { modDraft.zen.values[field.key] = next; };
+    if (field.type === 'checkbox') return toggleRow(field.label, null, value, set);
+    if (field.type === 'dropdown') {
+      return h('label', {}, field.label, h('select', {
+        onchange: (event) => set(field.options[Number(event.target.value)].value),
+      }, field.options.map((option, i) => h('option', { value: i, selected: option.value === value }, option.label))));
+    }
+    return h('label', {}, field.label, h('input', { value, maxLength: 4096, oninput: (event) => set(event.target.value) }));
+  }) || [];
+  return [
+    h('h2', {}, 'Моды'),
+    h('div.card', {}, controls),
+    h('button.mod-secondary', { onclick: () => changeMods('reset') }, 'Сбросить встроенные настройки'),
+    h('h3', {}, 'Zen Mods'),
+    h('form.mod-actions.zen-import', { onsubmit: (e) => {
+      e.preventDefault();
+      if (modBusy) return;
+      const button = e.currentTarget.querySelector('button');
+      button.disabled = true;
+      button.textContent = 'Загрузка…';
+      changeMods('zen', zenLink);
+    } },
+    h('input', { type: 'text', required: true, value: zenLink, maxLength: 240, placeholder: 'Ссылка на мод из zen-browser.app/mods', 'aria-label': 'Ссылка или UUID мода Zen',
+      oninput: (e) => { zenLink = e.target.value; } }),
+    h('button.mod-secondary', { type: 'submit' }, 'Импортировать')),
+    h('p.hint', {}, 'Поддержка CSS зависит от того, какие элементы интерфейса меняет мод.'),
+    modError && h('p.mod-error', { role: 'alert' }, modError),
+    h('h3', {}, 'CSS-моды'),
+    h('p.lead', {}, 'Стили для интерфейса Essential. Например, .tab.active меняет активную вкладку.'),
+    h('div.mod-actions', {},
+      h('button.mod-secondary', { onclick: () => changeMods('import') }, 'Импорт .css…'),
+      h('button.mod-secondary', { onclick: () => edit({ name: '', css: '' }) }, 'Создать мод')),
+    items.length > 0 && h('div.card', {}, items.map((item) => h('div.mod-item', {},
+      toggleRow(item.name, item.zen && ['Zen Mods', item.zen.author].filter(Boolean).join(' · '), item.enabled, (enabled) => changeMods('toggle', { id: item.id, enabled })),
+      h('button.mod-secondary', { onclick: () => edit(item) }, item.zen?.fields.length ? 'Настроить' : 'Изменить')))),
+    modDraft && h('form.card.mod-editor', { onsubmit: (e) => { e.preventDefault(); changeMods('save', modDraft); } },
+      h('label', {}, 'Название', h('input', { value: modDraft.name, required: true, maxLength: 80, oninput: (e) => { modDraft.name = e.target.value; } })),
+      zenFields,
+      h('details', { open: !modDraft.zen }, h('summary', {}, 'CSS'), h('textarea', { value: modDraft.css, spellcheck: false, 'aria-label': 'CSS',
+        placeholder: '.tab.active { color: white; }', oninput: (e) => { modDraft.css = e.target.value; } })),
+      h('div.mod-actions', {},
+        h('button.mod-secondary', { type: 'submit' }, 'Сохранить'),
+        h('button.mod-secondary', { type: 'button', onclick: () => { modDraft = null; modError = ''; render(); } }, 'Отмена'),
+        modDraft.id && h('button.mod-secondary', { type: 'button', onclick: () => {
+          const id = modDraft.id;
+          modDraft = null;
+          changeMods('remove', { id });
+        } }, 'Удалить'))),
+  ];
+}
+
+const SECTIONS = { appearance: renderAppearance, mods: renderMods, search: renderSearch, privacy: renderPrivacy, devices: renderDevices, alerts: renderAlerts, downloads: renderDownloads, system: renderSystem, import: renderImport, keys: renderKeys };
 
 function movePill() {
   const active = document.querySelector(`nav button[data-section="${section}"]`);
@@ -658,6 +756,9 @@ function close() {
 }
 
 panel.onOpen(async (s) => {
+  modDraft = null;
+  modError = '';
+  zenLink = '';
   data = await panel.get();
   update = await panel.updateState();
   alertInfo = await alerts.info();

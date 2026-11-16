@@ -22,13 +22,13 @@ function dot() {
 
 function makeTab(id) {
   const el = document.createElement('div');
-  el.className = 'tab';
+  el.className = 'tab tabbrowser-tab';
   el.draggable = true;
   el.innerHTML = `
-    <div class="fav"></div>
-    <div class="title"></div>
-    <button class="audio" title="Звук"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="waves" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/><path class="cross" d="M16 9l6 6M22 9l-6 6"/></svg></button>
-    <button class="close" title="Закрыть (Ctrl+W)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
+    <div class="fav tab-icon-stack"></div>
+    <div class="title tab-text tab-label"></div>
+    <button class="audio tab-icon-overlay" title="Звук"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9z"/><path class="waves" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/><path class="cross" d="M16 9l6 6M22 9l-6 6"/></svg></button>
+    <button class="close tab-close-button" title="Закрыть (Ctrl+W)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`;
   el.addEventListener('mousedown', (e) => {
     if (e.button === 0 && !e.target.closest('button')) browser.switchTab(id);
   });
@@ -75,6 +75,7 @@ function setFavicon(el, icon, pageUrl) {
   if (!icon && !/^https?:/.test(pageUrl || '')) return fav.replaceChildren(dot());
   const img = new Image();
   img.draggable = false;
+  img.className = 'tab-icon-image';
   fav.replaceChildren(loadFavicon(img, pageUrl, icon, () => img.replaceWith(dot())));
 }
 
@@ -127,6 +128,15 @@ function renderTabs() {
     el.classList.toggle('audible', t.audible);
     el.classList.toggle('muted', t.muted);
     el.classList.toggle('private', t.isPrivate);
+    const zenStates = { pending: t.sleeping, busy: t.loading, selected: t.id === ws().activeTab,
+      visuallyselected: t.id === ws().activeTab, soundplaying: t.audible, muted: t.muted };
+    const audio = el.querySelector('.audio');
+    for (const [name, enabled] of Object.entries(zenStates)) {
+      for (const node of [el, audio]) {
+        if (enabled) node.setAttribute(name, 'true');
+        else node.removeAttribute(name);
+      }
+    }
     el.querySelector('.waves').style.display = t.muted ? 'none' : '';
     el.querySelector('.cross').style.display = t.muted ? '' : 'none';
     el.querySelector('.title').textContent = t.title;
@@ -367,12 +377,48 @@ function renderPinnedExt() {
   }));
 }
 
+const modStyles = document.createElement('template');
+document.head.append(modStyles);
+const zenMarkers = document.createElement('div');
+zenMarkers.hidden = true;
+document.body.append(zenMarkers);
+browser.onMods(({ layout, styles }) => {
+  const root = document.documentElement;
+  root.style.setProperty('--sidebar', layout.width + 'px');
+  root.style.setProperty('--gap', layout.gap + 'px');
+  root.style.setProperty('--page-radius', layout.radius + 'px');
+  document.body.classList.toggle('sidebar-right', layout.side === 'right');
+  for (const key of ['dense', 'accent', 'monochrome', 'still']) document.body.classList.toggle('mod-' + key, layout[key]);
+  for (const old of document.head.querySelectorAll('style[data-essential-mod]')) old.remove();
+  zenMarkers.replaceChildren();
+  for (const sheet of styles) {
+    const style = document.createElement('style');
+    style.dataset.essentialMod = '';
+    if (typeof sheet === 'string') style.textContent = sheet;
+    else {
+      const marker = document.createElement('span');
+      marker.id = sheet.marker;
+      for (const [name, value] of Object.entries(sheet.attributes)) {
+        if (value !== false) marker.setAttribute(name, String(value));
+      }
+      zenMarkers.append(marker);
+      style.textContent = sheet.css;
+      modStyles.before(style);
+      const index = style.sheet.insertRule(':root {}', style.sheet.cssRules.length);
+      for (const [name, value] of Object.entries(sheet.variables)) style.sheet.cssRules[index].style.setProperty('--' + name, value);
+      continue;
+    }
+    modStyles.before(style);
+  }
+});
+
 browser.onState((s) => {
   state = s;
   document.body.classList.toggle('compact', s.compact);
   document.body.classList.toggle('peek', s.peek);
   document.body.classList.toggle('maximized', s.maximized);
   document.body.classList.toggle('fs', s.fullscreen);
+  $('#sidebar').toggleAttribute('zen-sidebar-expanded', !s.compact || s.peek);
   renderWorkspaces();
   renderEssentials();
   renderTabs();
@@ -470,6 +516,9 @@ $('#urlbar').addEventListener('click', (e) => {
 $('#newtab').addEventListener('click', () => browser.openSpotlight('new'));
 $('#ws-add').addEventListener('click', () => browser.createWs());
 $('#edge').addEventListener('mouseenter', () => browser.peek(true));
-$('#sidebar').addEventListener('mouseleave', (e) => { if (e.clientX > 20) browser.peek(false); });
+$('#sidebar').addEventListener('mouseleave', (e) => {
+  const distance = document.body.classList.contains('sidebar-right') ? innerWidth - e.clientX : e.clientX;
+  if (distance > 20) browser.peek(false);
+});
 
 browser.ready();

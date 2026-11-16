@@ -13,6 +13,12 @@
   --hover: rgba(255, 255, 255, .07);
   --selected: rgba(255, 255, 255, .13);
   --radius: 10px;
+  --zen-border-radius: var(--radius);
+  --zen-webview-border-radius: var(--page-radius, 10px);
+  --zen-primary-color: var(--ws);
+  --zen-colors-primary: var(--ws);
+  --zen-colors-border: color-mix(in srgb, currentColor 14%, transparent);
+  --toolbarbutton-hover-background: var(--hover);
   transition: --ws .5s ease;
 }
 
@@ -550,7 +556,7 @@ body.compact #compact { color: var(--ws); }
   bottom: var(--gap);
   right: var(--gap);
   left: var(--sidebar);
-  border-radius: var(--radius);
+  border-radius: var(--page-radius, 10px);
   background: #1a1a20;
   box-shadow: 0 8px 30px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .06);
   transition: left .26s cubic-bezier(.25, 1, .5, 1), background .4s ease;
@@ -565,6 +571,18 @@ body.compact:not(.peek) #card { left: var(--gap); }
   display: none;
 }
 body.compact:not(.peek) #edge { display: block; }
+
+body.sidebar-right #sidebar { left: auto; right: 0; padding-inline: 6px 10px; }
+body.sidebar-right.compact:not(.peek) #sidebar { transform: translateX(100%); }
+body.sidebar-right #edge { left: auto; right: 0; }
+body.sidebar-right #card { left: var(--gap); right: var(--sidebar); transition-property: right, background; }
+body.sidebar-right.compact:not(.peek) #card { right: var(--gap); }
+body.sidebar-right #toast { left: auto; right: calc(var(--sidebar) / 2); translate: 100% 0; }
+body.mod-dense :is(.tab, #newtab) { height: 29px; gap: 7px; }
+body.mod-accent .tab.active { box-shadow: inset 3px 0 var(--ws); }
+body.sidebar-right.mod-accent .tab.active { box-shadow: inset -3px 0 var(--ws); }
+body.mod-monochrome :is(.fav img, .ess img) { filter: grayscale(1); }
+body.mod-still :is(#sidebar, #toolbar, #card, .tab, .ess, #tabs, #ws-header) { transition: none; animation: none; }
 
 /* тост живёт над панелью: страница лежит поверх интерфейса и закрыла бы его */
 #toast {

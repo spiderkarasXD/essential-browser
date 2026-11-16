@@ -22,7 +22,8 @@ function fixture(t) {
   } } };
   const file = path.join(dir, 'proxy.json');
   const api = install({ session, chromeExt, file });
-  const call = (method, details = {}, ext = extension) => handlers[`proxy.settings.${method}`]({ extension: ext }, details);
+  const call = (method, details = {}, ext = extension, scope = `chrome-extension://${ext.id}/`) =>
+    handlers[`proxy.settings.${method}`]({ extension: ext, sender: { scope } }, details);
   return { api, call, applied, file, extension, session };
 }
 
@@ -47,6 +48,7 @@ test('set applies a real session proxy, reports its owner and clear resets it', 
 test('rejects callers without permission and unsupported private scope', async (t) => {
   const f = fixture(t);
   await assert.rejects(f.call('set', { value: { mode: 'direct' } }, { id: 'other', manifest: {} }), /permission/);
+  await assert.rejects(f.call('set', { value: { mode: 'direct' } }, f.extension, 'chrome-extension://other/'), /context/);
   await assert.rejects(f.call('set', { value: { mode: 'direct' }, scope: 'incognito_session_only' }), /Incognito/);
   assert.equal(f.applied.length, 0);
 });
@@ -93,7 +95,7 @@ test('preload exposes proxy calls and change events before chrome is frozen', as
   const source = fs.readFileSync(path.join(__dirname, '../extension-proxy-preload.js'), 'utf8');
   const calls = [];
   const listeners = new Map();
-  const context = vm.createContext({ chrome: { runtime: {
+  const context = vm.createContext({ location: { protocol: 'chrome-extension:' }, chrome: { runtime: {
     id: 'vpn', getManifest: () => ({ permissions: ['proxy'] }),
   } } });
   context.require = () => ({

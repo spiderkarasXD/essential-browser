@@ -500,3 +500,30 @@ kbd {
 .why-row + .why-row { border-top: 1px solid var(--line); }
 .why-row b { display: block; margin-bottom: 2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .why-row span { font-size: 13px; line-height: 1.45; }
+
+.mod-range { width: min(48%, 270px); }
+.mod-range .val { width: 58px; text-align: right; }
+.mod-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.mod-secondary { color: var(--text); background: var(--card); padding: 7px 11px; border: 1px solid var(--line); border-radius: 7px; }
+.mod-secondary:hover { background: rgba(255, 255, 255, .12); }
+.mod-item { display: flex; align-items: center; gap: 10px; padding-right: 14px; }
+.mod-item + .mod-item { border-top: 1px solid var(--line); }
+.mod-item > .row { flex: 1; min-width: 0; }
+.mod-item .label { overflow-wrap: anywhere; }
+.mod-editor { display: grid; gap: 12px; padding: 14px; margin-top: 12px; }
+.mod-editor label { display: grid; gap: 6px; }
+.mod-editor textarea {
+  width: 100%;
+  min-height: 155px;
+  resize: vertical;
+  color: var(--text);
+  background: var(--bg, #15151c);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  font: 12px/1.6 Consolas, monospace;
+}
+.mod-editor summary { margin-bottom: 8px; cursor: pointer; }
+.zen-import input { flex: 1; min-width: 190px; }
+.mod-editor .mod-actions { margin: 0; }
+.mod-error { color: #ff9b9c; }

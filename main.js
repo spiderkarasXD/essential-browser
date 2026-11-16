@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, clipboard, dialog, session, shell, Notification } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, clipboard, dialog, session, shell, Notification, webContents, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
@@ -9,11 +9,12 @@ const alerts = require('./alerts');
 const userscripts = require('./userscripts');
 const extensionProxy = require('./extension-proxy');
 const ext = require('./extensions');
+const mods = require('./mods');
+const zenMods = require('./zen-mods');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
 
 // Геометрия как в Zen: боковая панель слева, страница — карточка с отступами
-const SIDEBAR_W = 264;
 const GAP = 8;
 const TOOLBAR_H = 40; // верхняя панель как в Arc, в полноэкранном режиме прячется
 const NEWTAB_URL = pathToFileURL(path.join(__dirname, 'newtab.html')).href;
@@ -132,6 +133,7 @@ function writeJson(name, data) {
 const settings = { ...DEFAULT_SETTINGS, ...readJson('settings.json', {}) };
 settings.permissions = { ...DEFAULT_SETTINGS.permissions, ...settings.permissions };
 settings.clock = { ...DEFAULT_SETTINGS.clock, ...settings.clock };
+let chromeMods = mods.normalize(readJson('mods.json', {}));
 const saveSettings = () => writeJson('settings.json', settings);
 
 // ---------- флаги Chromium (до старта) ----------
@@ -412,21 +414,22 @@ function autofillRemove(kind, value) {
   writeJson('autofill.json', autofill);
 }
 
-// Левый край страницы. При скрытии/показе панели он плавно едет вслед за CSS-анимацией сайдбара
-let viewLeft = SIDEBAR_W;
+// Отступ страницы со стороны панели плавно меняется вместе с сайдбаром
+let viewLeft = chromeMods.layout.width;
 let leftAnim = null;
-const targetLeft = () => (compact && !peek ? GAP : SIDEBAR_W);
+const targetLeft = () => (compact && !peek ? chromeMods.layout.gap : chromeMods.layout.width);
 
 function placeView() {
   if (!shownView || !win) return;
   const { width, height } = win.getContentBounds();
   if (htmlFullscreen) return shownView.setBounds({ x: 0, y: 0, width, height });
-  const top = win.isFullScreen() ? GAP : TOOLBAR_H;
+  const { gap, side } = chromeMods.layout;
+  const top = win.isFullScreen() ? gap : TOOLBAR_H;
   shownView.setBounds({
-    x: viewLeft,
+    x: side === 'right' ? gap : viewLeft,
     y: top,
-    width: Math.max(0, width - viewLeft - GAP),
-    height: Math.max(0, height - top - GAP),
+    width: Math.max(0, width - viewLeft - gap),
+    height: Math.max(0, height - top - gap),
   });
 }
 
@@ -449,6 +452,11 @@ function layout() {
 
 function animateLeft() {
   clearInterval(leftAnim);
+  if (chromeMods.layout.still) {
+    leftAnim = null;
+    layout();
+    return;
+  }
   const from = viewLeft;
   const to = targetLeft();
   const start = Date.now();
@@ -492,7 +500,7 @@ function ensureView(tab) {
     },
   });
   view.setBackgroundColor('#ffffff');
-  if (view.setBorderRadius) view.setBorderRadius(10);
+  view.setBorderRadius?.(chromeMods.layout.radius);
   tab.view = view;
   const wc = view.webContents;
   // в приватных (несохраняемых) сеансах расширения Chrome не поддерживаются
@@ -779,6 +787,7 @@ function setCompact(on) {
   compact = on;
   peek = false;
   sendState();
+  if (chromeMods.items.some((item) => item.enabled && item.zen)) sendMods();
   animateLeft();
 }
 
@@ -786,6 +795,7 @@ function setPeek(on) {
   if (!compact || peek === on) return;
   peek = on;
   sendState();
+  if (chromeMods.items.some((item) => item.enabled && item.zen)) sendMods();
   animateLeft();
 }
 
@@ -1669,6 +1679,7 @@ const handle = (ch, fn) => ipcMain.handle(ch, (_e, ...args) => fn(...args));
 on('ui:ready', () => {
   if (!workspaces.length) restoreSession();
   else sendState();
+  sendMods();
   if (pendingUrl) {
     createTab(pendingUrl);
     pendingUrl = null;
@@ -1804,7 +1815,9 @@ function setupChromeExtensions() {
       if (bw !== win && !bw.isDestroyed()) bw.close();
     },
   });
-  proxyExtensions = extensionProxy.install({ session: session.defaultSession, chromeExt, file: path.join(app.getPath('userData'), 'extension-proxy.json') });
+  proxyExtensions = extensionProxy.install({
+    app, webContents, session: session.defaultSession, chromeExt, file: dataFile('extension-proxy.json'),
+  });
   setupUserScripts();
 }
 
@@ -1820,6 +1833,9 @@ function setupUserScripts() {
   ses.registerPreloadScript({ type: 'service-worker', id: 'essential-userscripts-sw', filePath: path.join(__dirname, 'userscripts-sw-preload.js') });
   for (const p of theirs) ses.registerPreloadScript({ type: p.type, id: p.id, filePath: p.filePath });
   ses.registerPreloadScript({ type: 'service-worker', id: 'essential-userscripts-sw-restore', filePath: path.join(__dirname, 'userscripts-sw-restore.js') });
+  for (const type of ['service-worker', 'frame']) {
+    ses.registerPreloadScript({ type, id: `essential-extension-alias-${type}`, filePath: path.join(__dirname, 'extension-alias-preload.js') });
+  }
   ses.registerPreloadScript({ type: 'frame', id: 'essential-userscripts', filePath: path.join(__dirname, 'userscripts-preload.js') });
 }
 
@@ -2021,6 +2037,7 @@ handle('panel:get', async () => {
   const w = getWs();
   return {
     settings,
+    mods: modState(),
     engines: Object.fromEntries(Object.entries(ENGINES).map(([k, v]) => [k, v.name])),
     downloadsDefault: app.getPath('downloads'),
     restartKeys: RESTART_KEYS,
@@ -2034,6 +2051,55 @@ handle('panel:get', async () => {
   };
 });
 on('panel:set', setSetting);
+function sendMods() {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.send('mods:apply', {
+    layout: chromeMods.layout,
+    styles: chromeMods.items.filter((item) => item.enabled)
+      .map((item) => item.zen ? zenMods.compile(item, !compact || peek) : item.css),
+  });
+}
+
+const modState = () => ({ ...chromeMods, options: mods.options });
+ipcMain.handle('mods:change', async (event, action, input) => {
+  if (event.sender !== overlays.panel?.webContents || event.senderFrame !== event.sender.mainFrame) return null;
+  try {
+    let next;
+    if (action === 'layout') next = mods.normalize({ ...chromeMods, layout: { ...chromeMods.layout, ...input } });
+    else if (action === 'reset') next = mods.normalize({ items: chromeMods.items });
+    else if (action === 'save') next = mods.save(chromeMods, input);
+    else if (action === 'zen') {
+      const mod = await zenMods.load(input, (url, options) => net.fetch(url, options));
+      next = mods.installZen(chromeMods, mod);
+    }
+    else if (action === 'import') {
+      const result = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: [{ name: 'CSS', extensions: ['css'] }] });
+      if (result.canceled) return modState();
+      const file = result.filePaths[0];
+      if (path.extname(file).toLowerCase() !== '.css') throw new Error('Выберите файл с расширением .css.');
+      const item = await mods.readFile(file);
+      next = mods.save(chromeMods, item);
+    } else if (action === 'toggle' || action === 'remove') {
+      const items = action === 'remove'
+        ? chromeMods.items.filter((item) => item.id !== input.id)
+        : chromeMods.items.map((item) => item.id === input.id ? { ...item, enabled: input.enabled === true } : item);
+      next = { ...chromeMods, items };
+    } else return { error: 'Неизвестное действие.' };
+
+    const file = dataFile('mods.json');
+    fs.writeFileSync(file + '.tmp', JSON.stringify(next));
+    fs.renameSync(file + '.tmp', file);
+    chromeMods = next;
+    clearInterval(leftAnim);
+    leftAnim = null;
+    for (const tab of tabs.values()) tab.view?.setBorderRadius?.(chromeMods.layout.radius);
+    layout();
+    sendMods();
+    return modState();
+  } catch (error) {
+    return { ...modState(), error: error.message };
+  }
+});
 // автозаполнение спрашивают сами страницы — отвечаем только обычным вкладкам и их окнам входа, не приватным
 const autofillSender = (wc) => {
   if (!wc.session.isPersistent()) return false; // приватный сеанс живёт только в памяти
