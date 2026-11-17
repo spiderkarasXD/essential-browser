@@ -1,4 +1,4 @@
-# Essential
+# Essential(i think it's kinda now abandoned or smth like that. just use zenium.)
 
 Браузер на Chromium (Electron 45) в духе Zen и Arc: вертикальные вкладки, пространства со своими темами, закреплённые сайты, всплывающая адресная строка, панель «Сайт» с расширениями, онбординг при первом запуске.
 
