@@ -706,6 +706,9 @@ function renderMods() {
       h('button.mod-secondary', { onclick: () => edit(item) }, item.zen?.fields.length ? 'Настроить' : 'Изменить')))),
     modDraft && h('form.card.mod-editor', { onsubmit: (e) => { e.preventDefault(); changeMods('save', modDraft); } },
       h('label', {}, 'Название', h('input', { value: modDraft.name, required: true, maxLength: 80, oninput: (e) => { modDraft.name = e.target.value; } })),
+      modDraft.zen?.id === data.mods.transparentZenId && h('p.hint', {}, data.mods.acrylicAvailable
+        ? 'Акрил включается вместе с модом. Прозрачность страниц можно включить отдельно. Она убирает фон страницы, а заливки отдельных блоков остаются.'
+        : 'Акрил окна доступен на Windows 11 22H2 и новее. Можно включить прозрачный фон страницы поверх темы Essential.'),
       zenFields,
       h('details', { open: !modDraft.zen }, h('summary', {}, 'CSS'), h('textarea', { value: modDraft.css, spellcheck: false, 'aria-label': 'CSS',
         placeholder: '.tab.active { color: white; }', oninput: (e) => { modDraft.css = e.target.value; } })),

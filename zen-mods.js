@@ -2,6 +2,37 @@ const origin = 'https://zen-browser.github.io/theme-store/themes/';
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const limit = 128 * 1024;
 const platformNames = { win32: 'windows', darwin: 'macos', linux: 'linux' };
+const TRANSPARENT_ZEN = '642854b5-88b4-4c40-b256-e035532109df';
+const BETTER_CTRL_TAB = '72f8f48d-86b9-4487-acea-eb4977b18f21';
+const transparentLabels = {
+  'browser-tabs-allow_transparent_browser': 'Прозрачный фон веб-страниц',
+  'mod-sameerasw-zen_bg_color_enabled': 'Использовать свой цвет окна',
+  'mod-sameerasw-zen_transparency_color': 'Цвет и прозрачность окна',
+  'mod-sameerasw_zen_light_tint': 'Тонировка прозрачной страницы',
+  'mod-sameerasw-zen_no_shadow': 'Убрать тень вокруг страницы',
+};
+
+const enabled = (items, id) => items.find((item) => item.enabled && item.zen?.id === id);
+
+function transparencies(items, acrylicAvailable) {
+  const mod = enabled(items, TRANSPARENT_ZEN);
+  const prefs = mod?.zen.values;
+  return {
+    acrylic: !!mod && acrylicAvailable,
+    pages: prefs?.['browser-tabs-allow_transparent_browser'] === true,
+    pageTint: String(prefs?.['mod-sameerasw_zen_light_tint']) === '1',
+    noShadow: prefs?.['mod-sameerasw-zen_no_shadow'] === true,
+    windowTint: prefs?.['mod-sameerasw-zen_bg_color_enabled'] === true ? prefs['mod-sameerasw-zen_transparency_color'] : '',
+  };
+}
+
+function visibleFields(zen) {
+  if (zen.id !== TRANSPARENT_ZEN) return zen.fields;
+  return zen.fields.filter((field) => Object.hasOwn(transparentLabels, field.key))
+    .map((field) => ({ ...field, label: transparentLabels[field.key], ...(field.type === 'dropdown' && {
+      options: field.options.map((option) => ({ ...option, label: String(option.value) === '1' ? 'Лёгкая' : 'Без тонировки' })),
+    }) }));
+}
 
 function modId(input) {
   const id = typeof input === 'string' && input.trim().match(
@@ -141,20 +172,24 @@ function compile(item, expanded) {
   const result = (condition) => condition ? '(min-width: 0px)' : '(width: -1px)';
   const bool = /\(\s*-moz-bool-pref\s*:\s*["']([\w.-]+)["']\s*\)/gi;
   const modern = /\(\s*-moz-pref\(\s*["']([\w.-]+)["']\s*(?:,\s*(?:"([^"]*)"|'([^']*)'|(-?\d+|true|false))\s*)?\)\s*\)/gi;
+  const modernBare = /-moz-pref\(\s*["']([\w.-]+)["']\s*(?:,\s*(?:"([^"]*)"|'([^']*)'|(-?\d+|true|false))\s*)?\)/gi;
+  const evaluate = (_condition, key, double, single, literal) => {
+    const expected = double ?? single ?? (literal === undefined || literal === 'true' ? true : literal === 'false' ? false : Number(literal));
+    return result(get(key) === expected);
+  };
   const selectorTokens = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#[\w-]+|\.[\w-]+|\bscrollbox(?::nth-child\(5\))?/g;
   // CSS nesting uses the same selector prelude as top-level rules.
   const preludes = /(?:^|(?<=[;{}]))((?:[^;{}"'\/]|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[\s\S]*?\*\/|\/(?!\*))*?)\{/g;
   const css = item.css.replace(preludes, (_match, original) => {
     let rule = original.replace(/\/\*[\s\S]*?\*\//g, '').trim();
-    if (rule.startsWith('@-moz-document')) rule = /(?:chrome:\/\/browser\/content\/(?:browser\.xhtml|["']))/.test(rule) ? '@media all' : '@media not all';
+    if (rule.startsWith('@-moz-document')) rule = /(?:chrome:\/\/browser\/content\/(?:browser\.xhtml|["'])|url-prefix\(\s*["']chrome:["']\s*\))/.test(rule) ? '@media all' : '@media not all';
     else if (rule.startsWith('@media')) {
       rule = rule.replace(bool, (_condition, key) => result(get(key) === true))
-        .replace(modern, (_condition, key, double, single, literal) => {
-          const expected = double ?? single ?? (literal === undefined || literal === 'true' ? true : literal === 'false' ? false : Number(literal));
-          return result(get(key) === expected);
-        }).replace(/\(\s*-moz-platform\s*:\s*(\w+)\s*\)/gi, (_condition, os) => result(os === platform));
+        .replace(modern, evaluate).replace(modernBare, evaluate)
+        .replace(/\(\s*-moz-platform\s*:\s*(\w+)\s*\)/gi, (_condition, os) => result(os === platform));
     } else if (!rule.startsWith('@')) {
       rule = rule.replace(selectorTokens, (token) => selectors[token] || token);
+      rule = rule.replace(/(\.ctrlTab-favicon-container\s+)image\b/g, '$1img');
     }
     return '\n' + rule + ' {';
   }).replace(/url\(\s*["']?chrome:\/\/branding\/content\/icon32\.png["']?\s*\)/gi, 'url(build/icon.png)')
@@ -166,4 +201,4 @@ function compile(item, expanded) {
   return { css, marker, attributes, variables };
 }
 
-module.exports = { load, normalize, values, compile };
+module.exports = { load, normalize, values, compile, enabled, transparencies, visibleFields, TRANSPARENT_ZEN, BETTER_CTRL_TAB };

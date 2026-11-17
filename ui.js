@@ -377,39 +377,21 @@ function renderPinnedExt() {
   }));
 }
 
-const modStyles = document.createElement('template');
-document.head.append(modStyles);
-const zenMarkers = document.createElement('div');
-zenMarkers.hidden = true;
-document.body.append(zenMarkers);
-browser.onMods(({ layout, styles }) => {
+browser.onMods(({ layout, styles, glass }) => {
   const root = document.documentElement;
   root.style.setProperty('--sidebar', layout.width + 'px');
   root.style.setProperty('--gap', layout.gap + 'px');
   root.style.setProperty('--page-radius', layout.radius + 'px');
   document.body.classList.toggle('sidebar-right', layout.side === 'right');
   for (const key of ['dense', 'accent', 'monochrome', 'still']) document.body.classList.toggle('mod-' + key, layout[key]);
-  for (const old of document.head.querySelectorAll('style[data-essential-mod]')) old.remove();
-  zenMarkers.replaceChildren();
-  for (const sheet of styles) {
-    const style = document.createElement('style');
-    style.dataset.essentialMod = '';
-    if (typeof sheet === 'string') style.textContent = sheet;
-    else {
-      const marker = document.createElement('span');
-      marker.id = sheet.marker;
-      for (const [name, value] of Object.entries(sheet.attributes)) {
-        if (value !== false) marker.setAttribute(name, String(value));
-      }
-      zenMarkers.append(marker);
-      style.textContent = sheet.css;
-      modStyles.before(style);
-      const index = style.sheet.insertRule(':root {}', style.sheet.cssRules.length);
-      for (const [name, value] of Object.entries(sheet.variables)) style.sheet.cssRules[index].style.setProperty('--' + name, value);
-      continue;
-    }
-    modStyles.before(style);
-  }
+  const customTint = CSS.supports('background-color', glass.windowTint);
+  document.body.classList.toggle('zen-glass', glass.acrylic);
+  document.body.classList.toggle('zen-glass-custom', glass.acrylic && customTint);
+  document.body.classList.toggle('zen-page-transparent', glass.pages);
+  document.body.classList.toggle('zen-page-tint', glass.pages && glass.pageTint);
+  document.body.classList.toggle('zen-no-page-shadow', glass.noShadow);
+  root.style.setProperty('--zen-glass-tint', customTint ? glass.windowTint : '');
+  applyModStyles(styles);
 });
 
 browser.onState((s) => {

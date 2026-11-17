@@ -11,6 +11,7 @@ const extensionProxy = require('./extension-proxy');
 const ext = require('./extensions');
 const mods = require('./mods');
 const zenMods = require('./zen-mods');
+const pageAppearance = require('./page-appearance');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
 
@@ -134,6 +135,9 @@ const settings = { ...DEFAULT_SETTINGS, ...readJson('settings.json', {}) };
 settings.permissions = { ...DEFAULT_SETTINGS.permissions, ...settings.permissions };
 settings.clock = { ...DEFAULT_SETTINGS.clock, ...settings.clock };
 let chromeMods = mods.normalize(readJson('mods.json', {}));
+const acrylicAvailable = process.platform === 'win32' && Number(process.getSystemVersion().split('.')[2]) >= 22621;
+let glass = zenMods.transparencies(chromeMods.items, acrylicAvailable);
+let acrylicApplied = false;
 const saveSettings = () => writeJson('settings.json', settings);
 
 // ---------- флаги Chromium (до старта) ----------
@@ -499,10 +503,10 @@ function ensureView(tab) {
       ...(tab.isPrivate ? { partition: 'essential-private' } : {}),
     },
   });
-  view.setBackgroundColor('#ffffff');
   view.setBorderRadius?.(chromeMods.layout.radius);
   tab.view = view;
   const wc = view.webContents;
+  tab.refreshAppearance = pageAppearance.attach(view, () => glass.pages && !(htmlFullscreen && activeTab() === tab));
   // в приватных (несохраняемых) сеансах расширения Chrome не поддерживаются
   if (chromeExt && !tab.isPrivate) chromeExt.addTab(wc, win);
 
@@ -560,8 +564,8 @@ function ensureView(tab) {
     tab.view = null;
     closeTab(tab.id);
   });
-  wc.on('enter-html-full-screen', () => { htmlFullscreen = true; layout(); });
-  wc.on('leave-html-full-screen', () => { htmlFullscreen = false; layout(); });
+  wc.on('enter-html-full-screen', () => { htmlFullscreen = true; tab.refreshAppearance(); layout(); });
+  wc.on('leave-html-full-screen', () => { htmlFullscreen = false; tab.refreshAppearance(); layout(); });
   wc.on('before-input-event', handleShortcut);
   // в компактном режиме прячем панель, как только мышь ушла на страницу
   wc.on('before-mouse-event', (_e, m) => {
@@ -634,7 +638,10 @@ function switchTab(id) {
   if (!tab) return;
   if (openOverlays.has('find') && getWs(tab.wsId)?.activeTab !== id) closeFind();
   const prev = activeTab();
-  if (prev && prev !== tab) autoPip(prev, tab);
+  if (prev && prev !== tab) {
+    if (zenMods.enabled(chromeMods.items, zenMods.BETTER_CTRL_TAB)) captureCtrlTabPreview(prev);
+    autoPip(prev, tab);
+  }
   activeWs = tab.wsId;
   getWs().activeTab = id;
   showActive();
@@ -698,8 +705,86 @@ function closeTab(id) {
 
 function cycleTab(step) {
   const w = getWs();
+  if (!w?.tabIds.length) return;
   const idx = w.tabIds.indexOf(w.activeTab);
   switchTab(w.tabIds[(idx + step + w.tabIds.length) % w.tabIds.length]);
+}
+
+let ctrlTab = null;
+const ctrlTabPreviews = new Map();
+
+async function captureCtrlTabPreview(tab) {
+  const wc = tab?.view?.webContents;
+  if (!wc || wc.isDestroyed() || tab.isPrivate || wc.isLoading()) return;
+  const url = wc.getURL();
+  try {
+    const image = await wc.capturePage();
+    if (image.isEmpty() || wc.isDestroyed() || wc.getURL() !== url || !tabs.has(tab.id)) return;
+    if (!zenMods.enabled(chromeMods.items, zenMods.BETTER_CTRL_TAB)) return;
+    const source = image.resize({ width: 256 }).toDataURL();
+    ctrlTabPreviews.delete(tab.id);
+    ctrlTabPreviews.set(tab.id, { url: displayUrl(url), source });
+    if (ctrlTabPreviews.size > 8) ctrlTabPreviews.delete(ctrlTabPreviews.keys().next().value);
+    return source;
+  } catch {}
+}
+
+function selectCtrlTab(step) {
+  const mod = zenMods.enabled(chromeMods.items, zenMods.BETTER_CTRL_TAB);
+  const ws = getWs();
+  if (!mod || !ws || ws.tabIds.length < 2) return cycleTab(step);
+  if (ctrlTab) {
+    const { cards } = ctrlTab;
+    ctrlTab.selected = (ctrlTab.selected + step + cards.length) % cards.length;
+    overlays.ctrlTab?.webContents.send('ctrl-tab:selection', ctrlTab.selected);
+    return;
+  }
+  const payload = {
+    cards: ws.tabIds.map((id) => {
+      const card = tabInfo(tabs.get(id));
+      const cached = ctrlTabPreviews.get(id);
+      return { ...card, preview: cached?.url === card.url ? cached.source : undefined };
+    }),
+    selected: (ws.tabIds.indexOf(ws.activeTab) + step + ws.tabIds.length) % ws.tabIds.length,
+    light: ws.theme.mode === 'light',
+    styles: [zenMods.compile(mod, !compact || peek)],
+  };
+  ctrlTab = payload;
+  const id = ws.activeTab;
+  const show = () => {
+    if (ctrlTab === payload && !openOverlays.has('ctrlTab')) showOverlay('ctrlTab', 'ctrl-tab.html', 'ctrl-tab:open', payload);
+  };
+  const timer = setTimeout(show, 100);
+  captureCtrlTabPreview(tabs.get(id)).then((source) => {
+    clearTimeout(timer);
+    if (ctrlTab !== payload) return;
+    if (source) {
+      payload.cards.find((card) => card.id === id).preview = source;
+      overlays.ctrlTab?.webContents.send('ctrl-tab:preview', id, source);
+    }
+    show();
+  });
+}
+
+function finishCtrlTab(commit, chosen = ctrlTab?.cards[ctrlTab.selected]?.id) {
+  if (!ctrlTab) return;
+  const matches = ctrlTab.cards.some((card) => card.id === chosen);
+  ctrlTab = null;
+  hideOverlay('ctrlTab');
+  if (commit && matches) switchTab(chosen);
+}
+
+function handleCtrlTabInput(event, input) {
+  if (!ctrlTab) return false;
+  const key = input.key.toLowerCase();
+  const release = input.type === 'keyUp' && (key === 'control' || key === 'meta' || /^(?:Control|Meta)(?:Left|Right)$/.test(input.code));
+  if (release || (input.type === 'keyDown' && key === 'enter')) finishCtrlTab(true);
+  else if (input.type === 'keyDown' && key === 'escape') finishCtrlTab(false);
+  else if (input.type === 'keyDown' && (key === 'tab' || key === 'arrowleft' || key === 'arrowright')) {
+    selectCtrlTab(key === 'arrowleft' || (key === 'tab' && input.shift) ? -1 : 1);
+  } else return false;
+  event.preventDefault();
+  return true;
 }
 
 function moveTab(id, toIndex) {
@@ -838,6 +923,7 @@ function overlay(name, file) {
     const view = new WebContentsView({ webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true } });
     view.setBackgroundColor('#00000000');
     view.webContents.on('will-navigate', (e) => e.preventDefault());
+    if (name === 'ctrlTab') view.webContents.on('before-input-event', handleCtrlTabInput);
     view.webContents.loadFile(file);
     overlays[name] = view;
   }
@@ -850,6 +936,7 @@ function showOverlay(name, file, channel, payload) {
   win.contentView.addChildView(view);
   layout();
   const send = () => {
+    if (!openOverlays.has(name) || !win || win.isDestroyed()) return;
     view.webContents.focus();
     view.webContents.send(channel, payload);
   };
@@ -862,7 +949,7 @@ function hideOverlay(name, delay = 0) {
   if (!openOverlays.delete(name)) return;
   activeWc()?.focus();
   setTimeout(() => {
-    if (!openOverlays.has(name)) win.contentView.removeChildView(overlays[name]);
+    if (!openOverlays.has(name) && win && !win.isDestroyed()) win.contentView.removeChildView(overlays[name]);
   }, delay);
 }
 
@@ -1442,6 +1529,7 @@ function toast(text) {
 // Сочетания клавиш — те же, что в Chrome, плюс свои (Ctrl+S — сайдбар, Ctrl+Alt+цифра — пространства).
 // Каждая запись: [условие, действие]. Порядок важен: сначала более длинные сочетания.
 function handleShortcut(event, input) {
+  if (handleCtrlTabInput(event, input)) return;
   if (input.type !== 'keyDown') return;
   const ctrl = input.control || input.meta;
   const { shift, alt } = input;
@@ -1462,7 +1550,7 @@ function handleShortcut(event, input) {
     [only(true) && (code === 'KeyT' || code === 'KeyN'), () => openSpotlight('new')],
     [(only(true) && (code === 'KeyW' || key === 'f4')), () => closeTab(getWs().activeTab)],
     [only(true, true) && code === 'KeyW', () => win.close()],
-    [ctrl && !alt && key === 'tab', () => cycleTab(shift ? -1 : 1)],
+    [ctrl && !alt && key === 'tab', () => selectCtrlTab(shift ? -1 : 1)],
     [only(true) && key === 'pagedown', () => cycleTab(1)],
     [only(true) && key === 'pageup', () => cycleTab(-1)],
     [only(true, true) && key === 'pagedown', () => moveActiveTab(1)],
@@ -2051,16 +2139,42 @@ handle('panel:get', async () => {
   };
 });
 on('panel:set', setSetting);
+ipcMain.on('ctrl-tab:choose', (event, id) => {
+  if (event.sender === overlays.ctrlTab?.webContents && event.senderFrame === event.sender.mainFrame) finishCtrlTab(id != null, id);
+});
 function sendMods() {
   if (!win || win.isDestroyed()) return;
   win.webContents.send('mods:apply', {
     layout: chromeMods.layout,
-    styles: chromeMods.items.filter((item) => item.enabled)
+    glass,
+    styles: chromeMods.items.filter((item) => item.enabled && item.zen?.id !== zenMods.BETTER_CTRL_TAB)
       .map((item) => item.zen ? zenMods.compile(item, !compact || peek) : item.css),
   });
 }
 
-const modState = () => ({ ...chromeMods, options: mods.options });
+function applyNativeMods() {
+  glass = zenMods.transparencies(chromeMods.items, acrylicAvailable);
+  if (acrylicApplied !== glass.acrylic) {
+    win.setBackgroundMaterial(glass.acrylic ? 'acrylic' : 'none');
+    win.setBackgroundColor(glass.acrylic ? '#00000000' : '#101015');
+    acrylicApplied = glass.acrylic;
+  }
+  for (const tab of tabs.values()) tab.refreshAppearance?.();
+  if (!zenMods.enabled(chromeMods.items, zenMods.BETTER_CTRL_TAB)) {
+    finishCtrlTab(false);
+    ctrlTabPreviews.clear();
+  }
+}
+
+const modState = () => ({
+  ...chromeMods,
+  options: mods.options,
+  acrylicAvailable,
+  transparentZenId: zenMods.TRANSPARENT_ZEN,
+  items: chromeMods.items.map((item) => item.zen ? {
+    ...item, zen: { ...item.zen, fields: zenMods.visibleFields(item.zen) },
+  } : item),
+});
 ipcMain.handle('mods:change', async (event, action, input) => {
   if (event.sender !== overlays.panel?.webContents || event.senderFrame !== event.sender.mainFrame) return null;
   try {
@@ -2090,6 +2204,7 @@ ipcMain.handle('mods:change', async (event, action, input) => {
     fs.writeFileSync(file + '.tmp', JSON.stringify(next));
     fs.renameSync(file + '.tmp', file);
     chromeMods = next;
+    applyNativeMods();
     clearInterval(leftAnim);
     leftAnim = null;
     for (const tab of tabs.values()) tab.view?.setBorderRadius?.(chromeMods.layout.radius);
@@ -2162,8 +2277,10 @@ app.whenReady().then(async () => {
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true },
   });
+  applyNativeMods();
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.on('before-input-event', handleShortcut);
+  win.on('blur', () => finishCtrlTab(false));
   win.on('resize', layout);
   // боковые кнопки мыши «назад/вперёд»
   win.on('app-command', (_e, cmd) => {

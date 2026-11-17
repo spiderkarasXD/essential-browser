@@ -52,6 +52,16 @@ body.light .ess { background: rgba(255, 255, 255, .5); }
 body.light .ess:hover, body.light .ess.active { background: rgba(255, 255, 255, .85); }
 body.light #ws-pop { background: #fff; }
 
+body.zen-glass { color-scheme: dark; background: rgba(12, 14, 20, .18); }
+body.zen-glass.light { color-scheme: light; background: rgba(241, 243, 249, .28); }
+body.zen-glass #bg { opacity: .43; }
+body.zen-glass.zen-glass-custom { background: var(--zen-glass-tint); }
+body.zen-glass.zen-glass-custom #bg { opacity: 0; }
+body.zen-page-transparent #card { background: transparent; }
+body.zen-page-tint #card { background: rgba(0, 0, 0, .12); }
+body.light.zen-page-tint #card { background: rgba(255, 255, 255, .18); }
+body.zen-no-page-shadow #card { box-shadow: none; }
+
 #grain {
   position: fixed;
   inset: 0;

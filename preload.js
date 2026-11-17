@@ -3,6 +3,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 const send = (channel) => (...args) => ipcRenderer.send(channel, ...args);
 const invoke = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
 
+contextBridge.exposeInMainWorld('ctrlTabPanel', {
+  onOpen: (cb) => ipcRenderer.on('ctrl-tab:open', (_e, data) => cb(data)),
+  onSelection: (cb) => ipcRenderer.on('ctrl-tab:selection', (_e, index) => cb(index)),
+  onPreview: (cb) => ipcRenderer.on('ctrl-tab:preview', (_e, id, source) => cb(id, source)),
+  choose: send('ctrl-tab:choose'),
+});
+
 // Открыть окно расширения (или вызвать chrome.action.onClicked) — то же сообщение, что шлёт
 // <browser-action-list> из electron-chrome-extensions. anchorRect — в координатах окна.
 const activateExt = (extensionId, anchorRect) => ipcRenderer.invoke('crx-msg-remote', '_self', 'browserAction.activate', {
